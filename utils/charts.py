@@ -243,143 +243,110 @@ def scenario_comparison_chart(scenarios: list[dict]) -> go.Figure:
     return fig
 
 
-# ── M&A Charts ───────────────────────────────────────────────────────────────
+# ── Variance Dashboard Charts ────────────────────────────────────────────────
 
-def mna_radar_chart(result: dict) -> go.Figure:
-    """Radar chart comparing Build vs Acquire vs Partner across scoring dimensions."""
-    categories = ["Cost", "Time", "Risk", "Dependency"]
+def variance_waterfall(ytd_df: pd.DataFrame) -> go.Figure:
+    """Waterfall chart of YTD variance by workstream."""
     fig = go.Figure()
 
-    for option, color in [("build", COLORS["primary"]), ("acquire", COLORS["accent"]), ("partner", COLORS["positive"])]:
-        scores = result[option]["scores"]
-        values = [scores["cost_score"], scores["time_score"], scores["risk_score"], scores["dependency_score"]]
-        values.append(values[0])  # close the polygon
-        fig.add_trace(go.Scatterpolar(
-            r=values,
-            theta=categories + [categories[0]],
-            fill="toself",
-            name=option.title(),
-            line=dict(color=color),
-            opacity=0.7,
-        ))
+    ws_names = ytd_df["Workstream"].str.replace("Satellite Manufacturing ", "Sat Mfg ")
+    variances = ytd_df["YTD Variance ($M)"].values
 
-    fig.update_layout(
-        polar=dict(
-            bgcolor="rgba(0,0,0,0)",
-            radialaxis=dict(visible=True, range=[0, 100], gridcolor=COLORS["grid"]),
-            angularaxis=dict(gridcolor=COLORS["grid"]),
-        ),
-        title=dict(text=f"Build vs Buy vs Partner — {result['target']}", font=dict(size=16, color=COLORS["text"])),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=COLORS["text"]),
-        height=420,
-        legend=dict(bgcolor="rgba(0,0,0,0)"),
-        margin=dict(l=60, r=60, t=50, b=40),
-    )
-    return fig
+    colors_bar = [COLORS["negative"] if v > 0 else COLORS["positive"] for v in variances]
 
-
-def mna_cost_comparison_chart(result: dict) -> go.Figure:
-    """Bar chart comparing total cost across options."""
-    options = ["Build", "Acquire", "Partner"]
-    costs = [
-        result["build"]["npv_cost_m"],
-        result["acquire"]["upfront_cost_m"],
-        result["partner"]["npv_cost_m"],
-    ]
-    times = [
-        result["build"]["time_to_capability_yrs"],
-        result["acquire"]["time_to_capability_yrs"],
-        result["partner"]["time_to_capability_yrs"],
-    ]
-    composites = [result[o.lower()]["scores"]["composite"] for o in options]
-
-    colors_list = [COLORS["primary"], COLORS["accent"], COLORS["positive"]]
-    recommended = result["recommended_option"]
-
-    fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=options, y=costs, name="NPV Cost ($M)",
-        marker_color=colors_list, opacity=0.85,
-        text=[f"{'★ ' if o == recommended else ''}{c:,.0f}M<br>{t:.1f} yrs" for o, c, t in zip(options, costs, times)],
+        x=ws_names,
+        y=variances,
+        marker_color=colors_bar,
+        opacity=0.85,
+        text=[f"{'+'if v > 0 else ''}{v:.1f}M" for v in variances],
         textposition="outside",
-        textfont=dict(color=COLORS["text"]),
+        textfont=dict(color=COLORS["text"], size=11),
     ))
 
-    layout = _base_layout(f"Cost Comparison — {result['target']}")
-    layout["yaxis"]["title"] = "NPV Cost ($M)"
-    layout["showlegend"] = False
+    fig.add_hline(y=0, line_dash="dash", line_color=COLORS["neutral"], opacity=0.5)
+
+    layout = _base_layout("YTD Variance by Workstream ($M) — Over / (Under)")
+    layout["yaxis"]["title"] = "Variance ($M)"
+    layout["xaxis"]["tickangle"] = -30
     fig.update_layout(**layout)
     return fig
 
 
-# ── Portfolio / Scenario Charts ──────────────────────────────────────────────
-
-def portfolio_heatmap(summary_df: pd.DataFrame) -> go.Figure:
-    """Heatmap of program NPVs across scenarios."""
-    pivot = summary_df.pivot_table(index="Program", columns="Scenario", values="NPV ($M)")
-    # Reorder columns
-    col_order = ["Bull Case", "Base Case", "Bear Case", "Stress Case"]
-    pivot = pivot.reindex(columns=[c for c in col_order if c in pivot.columns])
+def variance_heatmap(var_table: pd.DataFrame, through_month: int = 6) -> go.Figure:
+    """Heatmap of monthly variance % by workstream."""
+    filtered = var_table[var_table["Month_Idx"] < through_month].copy()
+    pivot = filtered.pivot_table(index="Workstream", columns="Month", values="Variance (%)")
+    # Reorder columns by month
+    month_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    pivot = pivot.reindex(columns=[m for m in month_order if m in pivot.columns])
+    pivot.index = pivot.index.str.replace("Satellite Manufacturing ", "Sat Mfg ")
 
     fig = go.Figure(go.Heatmap(
         z=pivot.values,
         x=pivot.columns,
         y=pivot.index,
-        colorscale="RdYlGn",
-        text=[[f"${v:,.0f}M" for v in row] for row in pivot.values],
+        colorscale="RdYlGn_r",  # reversed — red = over budget
+        zmid=0,
+        text=[[f"{v:.0f}%" for v in row] for row in pivot.values],
         texttemplate="%{text}",
-        textfont=dict(size=12),
-        colorbar=dict(title="NPV ($M)"),
+        textfont=dict(size=11),
+        colorbar=dict(title="Var %"),
     ))
 
-    layout = _base_layout("Program NPV Across Macro Scenarios ($M)", height=380)
+    layout = _base_layout("Monthly Variance Heatmap (%) — Red = Over Budget", height=380)
     fig.update_layout(**layout)
     return fig
 
 
-def portfolio_allocation_chart(alloc_df: pd.DataFrame) -> go.Figure:
-    """Horizontal bar chart showing optimal capital allocation."""
+def budget_vs_actual_trend(trend_df: pd.DataFrame, ws_name: str) -> go.Figure:
+    """Line chart of budget vs actual for a single workstream."""
     fig = go.Figure()
 
-    fig.add_trace(go.Bar(
-        y=alloc_df["Program"],
-        x=alloc_df["Total CapEx ($M)"],
-        orientation="h",
-        name="Total CapEx Required",
-        marker_color=COLORS["secondary"],
-        opacity=0.85,
-        text=alloc_df.apply(lambda r: f"${r['Total CapEx ($M)']:,.0f}M — {r['Funding Allocation']}", axis=1),
-        textposition="outside",
-        textfont=dict(color=COLORS["text"]),
+    fig.add_trace(go.Scatter(
+        x=trend_df["Month"], y=trend_df["Budget ($M)"],
+        name="Budget", line=dict(color=COLORS["neutral"], dash="dash", width=2),
+        mode="lines+markers",
+    ))
+    fig.add_trace(go.Scatter(
+        x=trend_df["Month"], y=trend_df["Actual ($M)"],
+        name="Actual", line=dict(color=COLORS["secondary"], width=3),
+        mode="lines+markers",
     ))
 
-    layout = _base_layout("Capital Allocation by Program ($M)")
-    layout["xaxis"]["title"] = "$M"
-    layout["showlegend"] = False
-    layout["margin"]["l"] = 180
+    # Shade variance
+    fig.add_trace(go.Scatter(
+        x=list(trend_df["Month"]) + list(trend_df["Month"])[::-1],
+        y=list(trend_df["Actual ($M)"]) + list(trend_df["Budget ($M)"])[::-1],
+        fill="toself",
+        fillcolor="rgba(231, 76, 60, 0.1)",
+        line=dict(width=0),
+        showlegend=False,
+    ))
+
+    short_name = ws_name.replace("Satellite Manufacturing ", "Sat Mfg ")
+    layout = _base_layout(f"Budget vs. Actual — {short_name} ($M)")
+    layout["yaxis"]["title"] = "$M"
     fig.update_layout(**layout)
     return fig
 
 
-def portfolio_stacked_capex(programs_data: pd.DataFrame) -> go.Figure:
-    """Stacked area chart of portfolio-level capex by program over time."""
-    pivot = programs_data.groupby(["calendar_year", "program"])["capex_m"].sum().unstack(fill_value=0)
-
+def cumulative_variance_chart(trend_df: pd.DataFrame, ws_name: str) -> go.Figure:
+    """Cumulative budget vs actual."""
     fig = go.Figure()
-    colors = [COLORS["primary"], COLORS["accent"], COLORS["positive"], COLORS["secondary"]]
 
-    for i, col in enumerate(pivot.columns):
-        fig.add_trace(go.Scatter(
-            x=pivot.index,
-            y=pivot[col],
-            name=col,
-            stackgroup="one",
-            line=dict(width=0.5),
-            fillcolor=colors[i % len(colors)],
-        ))
+    fig.add_trace(go.Scatter(
+        x=trend_df["Month"], y=trend_df["Cum Budget ($M)"],
+        name="Cum Budget", line=dict(color=COLORS["neutral"], dash="dash", width=2),
+        fill="tozeroy", fillcolor="rgba(149, 165, 166, 0.1)",
+    ))
+    fig.add_trace(go.Scatter(
+        x=trend_df["Month"], y=trend_df["Cum Actual ($M)"],
+        name="Cum Actual", line=dict(color=COLORS["accent"], width=3),
+    ))
 
-    layout = _base_layout("Portfolio Capital Deployment Over Time ($M)")
+    short_name = ws_name.replace("Satellite Manufacturing ", "Sat Mfg ")
+    layout = _base_layout(f"Cumulative Spend — {short_name} ($M)")
     layout["yaxis"]["title"] = "$M"
     fig.update_layout(**layout)
     return fig

@@ -26,19 +26,6 @@ from models.financial_model import (
     compute_progress_metrics,
 )
 from models.monte_carlo import run_monte_carlo, tornado_analysis
-from models.mna_model import (
-    SYNTHETIC_TARGETS,
-    SYNTHETIC_SCENARIOS as MNA_SCENARIOS,
-    evaluate_make_vs_buy,
-    build_comparison_table,
-)
-from models.scenario_planner import (
-    PROGRAMS,
-    MACRO_SCENARIOS,
-    build_portfolio_projection,
-    portfolio_summary,
-    optimal_allocation,
-)
 from models.capex_workflow import (
     CapExRequest,
     run_capex_workflow,
@@ -53,6 +40,13 @@ from models.rag_engine import (
     get_all_documents,
     format_context_for_llm,
 )
+from models.variance_engine import (
+    build_variance_table,
+    detect_anomalies,
+    get_ytd_summary,
+    get_monthly_trend,
+    WORKSTREAMS as VARIANCE_WORKSTREAMS,
+)
 from utils.charts import (
     cash_flow_waterfall,
     cumulative_investment_chart,
@@ -61,11 +55,10 @@ from utils.charts import (
     progress_per_dollar_chart,
     capex_by_workstream_chart,
     scenario_comparison_chart,
-    mna_radar_chart,
-    mna_cost_comparison_chart,
-    portfolio_heatmap,
-    portfolio_allocation_chart,
-    portfolio_stacked_capex,
+    variance_waterfall,
+    variance_heatmap,
+    budget_vs_actual_trend,
+    cumulative_variance_chart,
 )
 
 # ── Page Config ──────────────────────────────────────────────────────────────
@@ -160,14 +153,13 @@ m4.metric("Total CapEx", f"${metrics['total_capex_m']:,.0f}M")
 m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
 
 # ── Tabs ─────────────────────────────────────────────────────────────────────
-tab_cashflow, tab_capital, tab_mc, tab_mna, tab_portfolio, tab_workflow, tab_docs, tab_agent = st.tabs([
+tab_cashflow, tab_capital, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent = st.tabs([
     "💰 Cash Flow",
     "🎯 Capital Efficiency",
     "🎲 Monte Carlo",
-    "🏢 Make vs Buy",
-    "📊 Portfolio",
+    "📈 Variance",
     "📋 CapEx Workflow",
-    "📄 Doc Intelligence",
+    "📄 Doc Intel",
     "🤖 AI Agents",
 ])
 
@@ -274,102 +266,102 @@ with tab_mc:
     else:
         st.info("Click **▶ Run Full Analysis** in the sidebar to execute Monte Carlo simulations.")
 
-# ── Tab 4: Make vs Buy ───────────────────────────────────────────────────────
-with tab_mna:
+# ── Tab 4: Variance Dashboard ────────────────────────────────────────────────
+with tab_variance:
     st.markdown("""
-    ### Strategic Make vs. Buy Analysis
-    Evaluate build-vs-acquire-vs-partner decisions for critical TeraWave supply chain components.
-    Each target is scored across **cost**, **time-to-capability**, **risk**, and **dependency**.
+    ### FP&A Variance Dashboard
+    Monthly budget vs. actual with **automated anomaly detection** and AI-generated
+    variance commentary. This is the monthly close process — automated.
     """)
 
-    selected_target = st.selectbox(
-        "Select Target Company",
-        [t.name for t in SYNTHETIC_TARGETS],
-        format_func=lambda x: f"{x} — {next(t for t in SYNTHETIC_TARGETS if t.name == x).description[:60]}...",
+    through_month = st.select_slider(
+        "Reporting Period (through month)",
+        options=list(range(1, 13)),
+        value=6,
+        format_func=lambda x: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][x-1] + " 2026",
     )
 
-    target = next(t for t in SYNTHETIC_TARGETS if t.name == selected_target)
-    mna_result = evaluate_make_vs_buy(MNA_SCENARIOS[selected_target], wacc=assumptions.wacc)
+    # YTD Summary
+    ytd = get_ytd_summary(through_month)
+    total_budget = ytd["YTD Budget ($M)"].sum()
+    total_actual = ytd["YTD Actual ($M)"].sum()
+    total_var = total_actual - total_budget
+    total_var_pct = (total_var / total_budget * 100) if total_budget > 0 else 0
 
-    # Target profile
-    col_t1, col_t2, col_t3, col_t4 = st.columns(4)
-    col_t1.metric("Acquisition Price", f"${target.acquisition_price_m:,.0f}M")
-    col_t2.metric("Annual Revenue", f"${target.annual_revenue_m:,.0f}M")
-    col_t3.metric("Patents", f"{target.patents}")
-    col_t4.metric("Recommendation", f"**{mna_result['recommended_option']}**")
+    vm1, vm2, vm3, vm4 = st.columns(4)
+    vm1.metric("YTD Budget", f"${total_budget:,.0f}M")
+    vm2.metric("YTD Actual", f"${total_actual:,.0f}M")
+    vm3.metric("Total Variance", f"${total_var:+,.1f}M", delta=f"{total_var_pct:+.1f}%",
+               delta_color="inverse")
+    over_count = len(ytd[ytd["YTD Variance (%)"] > 5])
+    under_count = len(ytd[ytd["YTD Variance (%)"] < -5])
+    vm4.metric("Alerts", f"{over_count} over / {under_count} under")
 
-    col_radar, col_cost = st.columns(2)
-    with col_radar:
-        st.plotly_chart(mna_radar_chart(mna_result), use_container_width=True)
-    with col_cost:
-        st.plotly_chart(mna_cost_comparison_chart(mna_result), use_container_width=True)
+    # Charts
+    vc1, vc2 = st.columns(2)
+    with vc1:
+        st.plotly_chart(variance_waterfall(ytd), use_container_width=True)
+    with vc2:
+        var_table = build_variance_table()
+        st.plotly_chart(variance_heatmap(var_table, through_month), use_container_width=True)
 
-    # Detailed comparison table
-    comp_table = build_comparison_table(selected_target, wacc=assumptions.wacc)
-    st.subheader("Detailed Comparison")
-    st.dataframe(comp_table, use_container_width=True, hide_index=True)
+    # Anomaly alerts
+    alerts = detect_anomalies(through_month)
+    if alerts:
+        st.subheader(f"Automated Variance Alerts ({len(alerts)})")
+        for alert in alerts:
+            icon = "🔴" if alert.severity == "critical" else "🟡"
+            with st.expander(
+                f"{icon} {alert.workstream} — {alert.month}: "
+                f"{alert.variance_pct:+.0f}% (${alert.variance_m:+.1f}M)",
+                expanded=(alert.severity == "critical"),
+            ):
+                st.markdown(f"**{alert.auto_commentary}**")
+                st.markdown(f"Budget: ${alert.budget_m:.1f}M | Actual: ${alert.actual_m:.1f}M | "
+                            f"Type: {alert.alert_type.replace('_', ' ').title()}")
 
-    # Key capabilities
-    with st.expander("Target Capabilities & Strategic Fit"):
-        st.markdown(f"**{target.name}:** {target.description}")
-        st.markdown("**Key Capabilities:** " + ", ".join(target.key_capabilities))
-        st.markdown(f"**Strategic Fit:** {target.strategic_fit:.0%} | "
-                    f"**Integration Complexity:** {target.integration_complexity:.0%} | "
-                    f"**IP Overlap:** {target.ip_overlap_pct:.0%}")
-        if mna_result["recommended_option"] == "Acquire":
-            acq = mna_result["acquire"]
-            st.markdown(f"**EV/EBITDA Multiple:** {acq['ev_ebitda_multiple']:.1f}x | "
-                        f"**Year 1 Accretive:** {'Yes' if acq['accretive_year1'] else 'No'} | "
-                        f"**NPV of Synergies:** ${acq['npv_synergies_m']:,.0f}M")
+    # Workstream drill-down
+    st.divider()
+    st.subheader("Workstream Drill-Down")
+    selected_ws = st.selectbox("Select Workstream", VARIANCE_WORKSTREAMS)
+    trend = get_monthly_trend(selected_ws)
 
-# ── Tab 5: Portfolio Strategy ────────────────────────────────────────────────
-with tab_portfolio:
-    st.markdown("""
-    ### Scenario Planning & Portfolio Optimization
-    Long-range capital allocation across Blue Origin's major program bets,
-    evaluated under four macro scenarios from **Bull** to **Stress** case.
-    """)
+    dc1, dc2 = st.columns(2)
+    with dc1:
+        st.plotly_chart(budget_vs_actual_trend(trend, selected_ws), use_container_width=True)
+    with dc2:
+        st.plotly_chart(cumulative_variance_chart(trend, selected_ws), use_container_width=True)
 
-    # Budget control
-    budget = st.slider("Total Capital Budget ($M)", 15_000, 50_000, 30_000, 1_000,
-                        help="Total capital available across all programs")
+    # YTD summary table
+    with st.expander("Full YTD Summary Table"):
+        st.dataframe(ytd, use_container_width=True, hide_index=True)
 
-    # Portfolio summary heatmap
-    port_summary = portfolio_summary(wacc=assumptions.wacc)
-    st.plotly_chart(portfolio_heatmap(port_summary), use_container_width=True)
+    # AI variance commentary
+    if config.ANTHROPIC_API_KEY:
+        if st.button("🤖 Generate AI Variance Commentary", key="var_ai"):
+            with st.spinner("Agent generating variance report..."):
+                from agents.orchestrator import _call_agent
+                var_context = f"YTD Variance Summary (through {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][through_month-1]} 2026):\n\n"
+                var_context += ytd.to_string(index=False)
+                var_context += f"\n\nTotal Program Variance: ${total_var:+.1f}M ({total_var_pct:+.1f}%)"
+                var_context += "\n\nAlerts:\n"
+                for a in alerts[:8]:
+                    var_context += f"- {a.workstream} ({a.month}): {a.variance_pct:+.0f}% — {a.auto_commentary}\n"
 
-    # Optimal allocation
-    alloc = optimal_allocation(budget_m=budget, wacc=assumptions.wacc)
-    col_p1, col_p2 = st.columns(2)
+                variance_prompt = """You are a senior FP&A analyst writing the monthly variance commentary for Blue Origin's TeraWave program.
+Write a concise executive summary (3-4 paragraphs) covering:
+1. Overall program spend status vs. plan
+2. Top 2-3 workstreams requiring attention (with specific numbers)
+3. Reallocation recommendations — where can underspend offset overspend?
+4. Forward outlook — will the program land within full-year budget?
+Frame overspends through the 'accelerating progress' lens where justified.
+⚠️ All data is synthetic for demonstration purposes."""
 
-    with col_p1:
-        st.plotly_chart(portfolio_allocation_chart(alloc), use_container_width=True)
+                ai_commentary = _call_agent(variance_prompt, "Generate the monthly variance report.", var_context)
+                st.markdown("### AI-Generated Variance Commentary")
+                st.markdown(ai_commentary)
 
-    with col_p2:
-        # Stacked capex by program (base case)
-        base_scenario = next(s for s in MACRO_SCENARIOS if s.name == "Base Case")
-        port_proj = build_portfolio_projection(base_scenario, wacc=assumptions.wacc)
-        st.plotly_chart(portfolio_stacked_capex(port_proj), use_container_width=True)
-
-    # Allocation table
-    st.subheader("Program Rankings & Allocation")
-    display_alloc = alloc[["Program", "Total CapEx ($M)", "Prob-Weighted NPV ($M)",
-                           "NPV / CapEx Ratio", "Strategic Priority", "Risk Category",
-                           "Combined Score", "Funding Allocation"]].copy()
-    st.dataframe(display_alloc, use_container_width=True, hide_index=True)
-
-    # Program detail cards
-    with st.expander("Program Details"):
-        for prog in PROGRAMS:
-            st.markdown(f"**{prog.name}** — {prog.description}")
-            st.markdown(f"CapEx: ${prog.total_capex_m:,.0f}M | "
-                        f"Revenue Start: Year {prog.revenue_start_year} | "
-                        f"Steady-State Rev: ${prog.steady_state_revenue_m:,.0f}M/yr | "
-                        f"P(Success): {prog.probability_of_success:.0%} | "
-                        f"Risk: {prog.risk_category}")
-            st.markdown("---")
-
-# ── Tab 6: CapEx Workflow ────────────────────────────────────────────────────
+# ── Tab 5: CapEx Workflow ────────────────────────────────────────────────────
 with tab_workflow:
     st.markdown("""
     ### Capital Expenditure Request Workflow
@@ -588,8 +580,8 @@ with tab_agent:
     Ask questions and the system routes to the appropriate specialized agent:
     - **Capital Allocation Analyst** — workstream prioritization, deployment strategy
     - **Risk & Scenario Agent** — Monte Carlo interpretation, tail risk analysis
-    - **M&A / Make-vs-Buy Analyst** — build vs acquire vs partner decisions
-    - **Strategic Portfolio Planner** — multi-program allocation, scenario planning
+    - **CapEx Workflow Analyst** — reviews capital expenditure requests
+    - **Document Intelligence** — answers questions grounded in source documents
     - **Investment Memo Writer** — generate board-ready investment memos
 
     *Powered by Claude (Anthropic)*
@@ -604,13 +596,6 @@ with tab_agent:
     }
     if "mc_results" in st.session_state:
         model_data["mc_summary"] = st.session_state["mc_results"].summary
-    # Add M&A and portfolio context
-    mna_results_all = {}
-    for tname in MNA_SCENARIOS:
-        mna_results_all[tname] = evaluate_make_vs_buy(MNA_SCENARIOS[tname], assumptions.wacc)
-    model_data["mna_results"] = mna_results_all
-    model_data["portfolio_summary"] = portfolio_summary(wacc=assumptions.wacc)
-    model_data["portfolio_allocation"] = optimal_allocation(wacc=assumptions.wacc)
 
     # Chat interface
     if "messages" not in st.session_state:
@@ -628,20 +613,13 @@ with tab_agent:
     if not st.session_state.messages:
         st.markdown("**Suggested queries:**")
         row1 = st.columns(3)
-        row2 = st.columns(2)
         suggestions = [
             "Which workstreams should we accelerate investment in?",
             "What are the top risk factors driving NPV variance?",
-            "Should we acquire Photon Dynamics or build OISL in-house?",
-            "How should we allocate capital across the program portfolio?",
             "Generate an investment memo for the TeraWave program.",
         ]
-        for i, sug in enumerate(suggestions[:3]):
+        for i, sug in enumerate(suggestions):
             if row1[i].button(sug, key=f"sug_{i}", use_container_width=True):
-                st.session_state["pending_query"] = sug
-                st.rerun()
-        for i, sug in enumerate(suggestions[3:]):
-            if row2[i].button(sug, key=f"sug_{i+3}", use_container_width=True):
                 st.session_state["pending_query"] = sug
                 st.rerun()
 
@@ -678,12 +656,12 @@ with tab_agent:
                 question_lower = user_msg.lower()
                 if any(kw in question_lower for kw in ["memo", "report", "write", "document", "board"]):
                     agent_name = "Investment Memo Writer"
-                elif any(kw in question_lower for kw in ["m&a", "acqui", "build vs", "make vs", "buy vs", "partner", "vertical", "supplier", "target"]):
-                    agent_name = "M&A / Make-vs-Buy Analyst"
-                elif any(kw in question_lower for kw in ["portfolio", "program bet", "long-range", "macro", "bull", "bear", "stress", "multi-program"]):
-                    agent_name = "Strategic Portfolio Planner"
                 elif any(kw in question_lower for kw in ["risk", "monte carlo", "probability", "tail", "p90", "p10", "simulation", "uncertainty"]):
                     agent_name = "Risk & Scenario Agent"
+                elif any(kw in question_lower for kw in ["capex", "request", "approval", "workflow"]):
+                    agent_name = "CapEx Workflow Analyst"
+                elif any(kw in question_lower for kw in ["contract", "vendor", "policy", "document", "sla"]):
+                    agent_name = "Document Intelligence"
                 else:
                     agent_name = "Capital Allocation Analyst"
                 st.markdown(f'<span class="agent-badge">→ {agent_name}</span>', unsafe_allow_html=True)

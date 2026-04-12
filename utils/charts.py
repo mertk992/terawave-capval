@@ -239,3 +239,145 @@ def scenario_comparison_chart(scenarios: list[dict]) -> go.Figure:
     layout["yaxis"]["title"] = "NPV ($M)"
     fig.update_layout(**layout)
     return fig
+
+
+# ── M&A Charts ───────────────────────────────────────────────────────────────
+
+def mna_radar_chart(result: dict) -> go.Figure:
+    """Radar chart comparing Build vs Acquire vs Partner across scoring dimensions."""
+    categories = ["Cost", "Time", "Risk", "Dependency"]
+    fig = go.Figure()
+
+    for option, color in [("build", COLORS["primary"]), ("acquire", COLORS["accent"]), ("partner", COLORS["positive"])]:
+        scores = result[option]["scores"]
+        values = [scores["cost_score"], scores["time_score"], scores["risk_score"], scores["dependency_score"]]
+        values.append(values[0])  # close the polygon
+        fig.add_trace(go.Scatterpolar(
+            r=values,
+            theta=categories + [categories[0]],
+            fill="toself",
+            name=option.title(),
+            line=dict(color=color),
+            opacity=0.7,
+        ))
+
+    fig.update_layout(
+        polar=dict(
+            bgcolor="rgba(0,0,0,0)",
+            radialaxis=dict(visible=True, range=[0, 100], gridcolor=COLORS["grid"]),
+            angularaxis=dict(gridcolor=COLORS["grid"]),
+        ),
+        title=dict(text=f"Build vs Buy vs Partner — {result['target']}", font=dict(size=16, color=COLORS["text"])),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=COLORS["text"]),
+        height=420,
+        legend=dict(bgcolor="rgba(0,0,0,0)"),
+        margin=dict(l=60, r=60, t=50, b=40),
+    )
+    return fig
+
+
+def mna_cost_comparison_chart(result: dict) -> go.Figure:
+    """Bar chart comparing total cost across options."""
+    options = ["Build", "Acquire", "Partner"]
+    costs = [
+        result["build"]["npv_cost_m"],
+        result["acquire"]["upfront_cost_m"],
+        result["partner"]["npv_cost_m"],
+    ]
+    times = [
+        result["build"]["time_to_capability_yrs"],
+        result["acquire"]["time_to_capability_yrs"],
+        result["partner"]["time_to_capability_yrs"],
+    ]
+    composites = [result[o.lower()]["scores"]["composite"] for o in options]
+
+    colors_list = [COLORS["primary"], COLORS["accent"], COLORS["positive"]]
+    recommended = result["recommended_option"]
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=options, y=costs, name="NPV Cost ($M)",
+        marker_color=colors_list, opacity=0.85,
+        text=[f"{'★ ' if o == recommended else ''}{c:,.0f}M<br>{t:.1f} yrs" for o, c, t in zip(options, costs, times)],
+        textposition="outside",
+        textfont=dict(color=COLORS["text"]),
+    ))
+
+    layout = _base_layout(f"Cost Comparison — {result['target']}")
+    layout["yaxis"]["title"] = "NPV Cost ($M)"
+    layout["showlegend"] = False
+    fig.update_layout(**layout)
+    return fig
+
+
+# ── Portfolio / Scenario Charts ──────────────────────────────────────────────
+
+def portfolio_heatmap(summary_df: pd.DataFrame) -> go.Figure:
+    """Heatmap of program NPVs across scenarios."""
+    pivot = summary_df.pivot_table(index="Program", columns="Scenario", values="NPV ($M)")
+    # Reorder columns
+    col_order = ["Bull Case", "Base Case", "Bear Case", "Stress Case"]
+    pivot = pivot.reindex(columns=[c for c in col_order if c in pivot.columns])
+
+    fig = go.Figure(go.Heatmap(
+        z=pivot.values,
+        x=pivot.columns,
+        y=pivot.index,
+        colorscale="RdYlGn",
+        text=[[f"${v:,.0f}M" for v in row] for row in pivot.values],
+        texttemplate="%{text}",
+        textfont=dict(size=12),
+        colorbar=dict(title="NPV ($M)"),
+    ))
+
+    layout = _base_layout("Program NPV Across Macro Scenarios ($M)", height=380)
+    fig.update_layout(**layout)
+    return fig
+
+
+def portfolio_allocation_chart(alloc_df: pd.DataFrame) -> go.Figure:
+    """Horizontal bar chart showing optimal capital allocation."""
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        y=alloc_df["Program"],
+        x=alloc_df["Total CapEx ($M)"],
+        orientation="h",
+        name="Total CapEx Required",
+        marker_color=COLORS["secondary"],
+        opacity=0.85,
+        text=alloc_df.apply(lambda r: f"${r['Total CapEx ($M)']:,.0f}M — {r['Funding Allocation']}", axis=1),
+        textposition="outside",
+        textfont=dict(color=COLORS["text"]),
+    ))
+
+    layout = _base_layout("Capital Allocation by Program ($M)")
+    layout["xaxis"]["title"] = "$M"
+    layout["showlegend"] = False
+    layout["margin"]["l"] = 180
+    fig.update_layout(**layout)
+    return fig
+
+
+def portfolio_stacked_capex(programs_data: pd.DataFrame) -> go.Figure:
+    """Stacked area chart of portfolio-level capex by program over time."""
+    pivot = programs_data.groupby(["calendar_year", "program"])["capex_m"].sum().unstack(fill_value=0)
+
+    fig = go.Figure()
+    colors = [COLORS["primary"], COLORS["accent"], COLORS["positive"], COLORS["secondary"]]
+
+    for i, col in enumerate(pivot.columns):
+        fig.add_trace(go.Scatter(
+            x=pivot.index,
+            y=pivot[col],
+            name=col,
+            stackgroup="one",
+            line=dict(width=0.5),
+            fillcolor=colors[i % len(colors)],
+        ))
+
+    layout = _base_layout("Portfolio Capital Deployment Over Time ($M)")
+    layout["yaxis"]["title"] = "$M"
+    fig.update_layout(**layout)
+    return fig

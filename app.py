@@ -26,6 +26,19 @@ from models.financial_model import (
     compute_progress_metrics,
 )
 from models.monte_carlo import run_monte_carlo, tornado_analysis
+from models.mna_model import (
+    SYNTHETIC_TARGETS,
+    SYNTHETIC_SCENARIOS as MNA_SCENARIOS,
+    evaluate_make_vs_buy,
+    build_comparison_table,
+)
+from models.scenario_planner import (
+    PROGRAMS,
+    MACRO_SCENARIOS,
+    build_portfolio_projection,
+    portfolio_summary,
+    optimal_allocation,
+)
 from utils.charts import (
     cash_flow_waterfall,
     cumulative_investment_chart,
@@ -34,6 +47,11 @@ from utils.charts import (
     progress_per_dollar_chart,
     capex_by_workstream_chart,
     scenario_comparison_chart,
+    mna_radar_chart,
+    mna_cost_comparison_chart,
+    portfolio_heatmap,
+    portfolio_allocation_chart,
+    portfolio_stacked_capex,
 )
 
 # ── Page Config ──────────────────────────────────────────────────────────────
@@ -128,11 +146,13 @@ m4.metric("Total CapEx", f"${metrics['total_capex_m']:,.0f}M")
 m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
 
 # ── Tabs ─────────────────────────────────────────────────────────────────────
-tab_cashflow, tab_capital, tab_mc, tab_agent = st.tabs([
-    "💰 Cash Flow Model",
+tab_cashflow, tab_capital, tab_mc, tab_mna, tab_portfolio, tab_agent = st.tabs([
+    "💰 Cash Flow",
     "🎯 Capital Efficiency",
-    "🎲 Monte Carlo & Risk",
-    "🤖 AI Agent Console",
+    "🎲 Monte Carlo",
+    "🏢 Make vs Buy",
+    "📊 Portfolio Strategy",
+    "🤖 AI Agents",
 ])
 
 # ── Tab 1: Cash Flow ─────────────────────────────────────────────────────────
@@ -238,13 +258,110 @@ with tab_mc:
     else:
         st.info("Click **▶ Run Full Analysis** in the sidebar to execute Monte Carlo simulations.")
 
-# ── Tab 4: AI Agent Console ──────────────────────────────────────────────────
+# ── Tab 4: Make vs Buy ───────────────────────────────────────────────────────
+with tab_mna:
+    st.markdown("""
+    ### Strategic Make vs. Buy Analysis
+    Evaluate build-vs-acquire-vs-partner decisions for critical TeraWave supply chain components.
+    Each target is scored across **cost**, **time-to-capability**, **risk**, and **dependency**.
+    """)
+
+    selected_target = st.selectbox(
+        "Select Target Company",
+        [t.name for t in SYNTHETIC_TARGETS],
+        format_func=lambda x: f"{x} — {next(t for t in SYNTHETIC_TARGETS if t.name == x).description[:60]}...",
+    )
+
+    target = next(t for t in SYNTHETIC_TARGETS if t.name == selected_target)
+    mna_result = evaluate_make_vs_buy(MNA_SCENARIOS[selected_target], wacc=assumptions.wacc)
+
+    # Target profile
+    col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+    col_t1.metric("Acquisition Price", f"${target.acquisition_price_m:,.0f}M")
+    col_t2.metric("Annual Revenue", f"${target.annual_revenue_m:,.0f}M")
+    col_t3.metric("Patents", f"{target.patents}")
+    col_t4.metric("Recommendation", f"**{mna_result['recommended_option']}**")
+
+    col_radar, col_cost = st.columns(2)
+    with col_radar:
+        st.plotly_chart(mna_radar_chart(mna_result), use_container_width=True)
+    with col_cost:
+        st.plotly_chart(mna_cost_comparison_chart(mna_result), use_container_width=True)
+
+    # Detailed comparison table
+    comp_table = build_comparison_table(selected_target, wacc=assumptions.wacc)
+    st.subheader("Detailed Comparison")
+    st.dataframe(comp_table, use_container_width=True, hide_index=True)
+
+    # Key capabilities
+    with st.expander("Target Capabilities & Strategic Fit"):
+        st.markdown(f"**{target.name}:** {target.description}")
+        st.markdown("**Key Capabilities:** " + ", ".join(target.key_capabilities))
+        st.markdown(f"**Strategic Fit:** {target.strategic_fit:.0%} | "
+                    f"**Integration Complexity:** {target.integration_complexity:.0%} | "
+                    f"**IP Overlap:** {target.ip_overlap_pct:.0%}")
+        if mna_result["recommended_option"] == "Acquire":
+            acq = mna_result["acquire"]
+            st.markdown(f"**EV/EBITDA Multiple:** {acq['ev_ebitda_multiple']:.1f}x | "
+                        f"**Year 1 Accretive:** {'Yes' if acq['accretive_year1'] else 'No'} | "
+                        f"**NPV of Synergies:** ${acq['npv_synergies_m']:,.0f}M")
+
+# ── Tab 5: Portfolio Strategy ────────────────────────────────────────────────
+with tab_portfolio:
+    st.markdown("""
+    ### Scenario Planning & Portfolio Optimization
+    Long-range capital allocation across Blue Origin's major program bets,
+    evaluated under four macro scenarios from **Bull** to **Stress** case.
+    """)
+
+    # Budget control
+    budget = st.slider("Total Capital Budget ($M)", 15_000, 50_000, 30_000, 1_000,
+                        help="Total capital available across all programs")
+
+    # Portfolio summary heatmap
+    port_summary = portfolio_summary(wacc=assumptions.wacc)
+    st.plotly_chart(portfolio_heatmap(port_summary), use_container_width=True)
+
+    # Optimal allocation
+    alloc = optimal_allocation(budget_m=budget, wacc=assumptions.wacc)
+    col_p1, col_p2 = st.columns(2)
+
+    with col_p1:
+        st.plotly_chart(portfolio_allocation_chart(alloc), use_container_width=True)
+
+    with col_p2:
+        # Stacked capex by program (base case)
+        base_scenario = next(s for s in MACRO_SCENARIOS if s.name == "Base Case")
+        port_proj = build_portfolio_projection(base_scenario, wacc=assumptions.wacc)
+        st.plotly_chart(portfolio_stacked_capex(port_proj), use_container_width=True)
+
+    # Allocation table
+    st.subheader("Program Rankings & Allocation")
+    display_alloc = alloc[["Program", "Total CapEx ($M)", "Prob-Weighted NPV ($M)",
+                           "NPV / CapEx Ratio", "Strategic Priority", "Risk Category",
+                           "Combined Score", "Funding Allocation"]].copy()
+    st.dataframe(display_alloc, use_container_width=True, hide_index=True)
+
+    # Program detail cards
+    with st.expander("Program Details"):
+        for prog in PROGRAMS:
+            st.markdown(f"**{prog.name}** — {prog.description}")
+            st.markdown(f"CapEx: ${prog.total_capex_m:,.0f}M | "
+                        f"Revenue Start: Year {prog.revenue_start_year} | "
+                        f"Steady-State Rev: ${prog.steady_state_revenue_m:,.0f}M/yr | "
+                        f"P(Success): {prog.probability_of_success:.0%} | "
+                        f"Risk: {prog.risk_category}")
+            st.markdown("---")
+
+# ── Tab 6: AI Agent Console ──────────────────────────────────────────────────
 with tab_agent:
     st.markdown("""
     ### AI Agent Console
-    Ask questions and the system will route to the appropriate specialized agent:
+    Ask questions and the system routes to the appropriate specialized agent:
     - **Capital Allocation Analyst** — workstream prioritization, deployment strategy
     - **Risk & Scenario Agent** — Monte Carlo interpretation, tail risk analysis
+    - **M&A / Make-vs-Buy Analyst** — build vs acquire vs partner decisions
+    - **Strategic Portfolio Planner** — multi-program allocation, scenario planning
     - **Investment Memo Writer** — generate board-ready investment memos
 
     *Powered by Claude (Anthropic)*
@@ -259,6 +376,13 @@ with tab_agent:
     }
     if "mc_results" in st.session_state:
         model_data["mc_summary"] = st.session_state["mc_results"].summary
+    # Add M&A and portfolio context
+    mna_results_all = {}
+    for tname in MNA_SCENARIOS:
+        mna_results_all[tname] = evaluate_make_vs_buy(MNA_SCENARIOS[tname], assumptions.wacc)
+    model_data["mna_results"] = mna_results_all
+    model_data["portfolio_summary"] = portfolio_summary(wacc=assumptions.wacc)
+    model_data["portfolio_allocation"] = optimal_allocation(wacc=assumptions.wacc)
 
     # Chat interface
     if "messages" not in st.session_state:
@@ -275,14 +399,21 @@ with tab_agent:
     # Suggested prompts
     if not st.session_state.messages:
         st.markdown("**Suggested queries:**")
-        cols = st.columns(3)
+        row1 = st.columns(3)
+        row2 = st.columns(2)
         suggestions = [
-            "Which workstreams should we accelerate investment in to maximize progress?",
-            "What are the top risk factors and how should we invest to retire them?",
+            "Which workstreams should we accelerate investment in?",
+            "What are the top risk factors driving NPV variance?",
+            "Should we acquire Photon Dynamics or build OISL in-house?",
+            "How should we allocate capital across the program portfolio?",
             "Generate an investment memo for the TeraWave program.",
         ]
-        for i, sug in enumerate(suggestions):
-            if cols[i].button(sug, key=f"sug_{i}", use_container_width=True):
+        for i, sug in enumerate(suggestions[:3]):
+            if row1[i].button(sug, key=f"sug_{i}", use_container_width=True):
+                st.session_state["pending_query"] = sug
+                st.rerun()
+        for i, sug in enumerate(suggestions[3:]):
+            if row2[i].button(sug, key=f"sug_{i+3}", use_container_width=True):
                 st.session_state["pending_query"] = sug
                 st.rerun()
 
@@ -316,10 +447,13 @@ with tab_agent:
                 st.markdown("**Demo mode:** Showing agent routing logic. "
                             f"This query would be routed to the appropriate agent based on keywords.")
                 # Show which agent would be selected
-                from agents.orchestrator import query_router
                 question_lower = user_msg.lower()
-                if any(kw in question_lower for kw in ["memo", "report", "write", "document", "board", "summary"]):
+                if any(kw in question_lower for kw in ["memo", "report", "write", "document", "board"]):
                     agent_name = "Investment Memo Writer"
+                elif any(kw in question_lower for kw in ["m&a", "acqui", "build vs", "make vs", "buy vs", "partner", "vertical", "supplier", "target"]):
+                    agent_name = "M&A / Make-vs-Buy Analyst"
+                elif any(kw in question_lower for kw in ["portfolio", "program bet", "long-range", "macro", "bull", "bear", "stress", "multi-program"]):
+                    agent_name = "Strategic Portfolio Planner"
                 elif any(kw in question_lower for kw in ["risk", "monte carlo", "probability", "tail", "p90", "p10", "simulation", "uncertainty"]):
                     agent_name = "Risk & Scenario Agent"
                 else:

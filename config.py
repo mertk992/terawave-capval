@@ -7,7 +7,11 @@ This tool was built as a technical demo and does not reflect actual Blue Origin 
 
 import os
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+try:
+    import streamlit as st
+    ANTHROPIC_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", os.environ.get("ANTHROPIC_API_KEY", ""))
+except Exception:
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MODEL = "claude-sonnet-4-6"
 
 # ── TeraWave Program Parameters (SYNTHETIC) ─────────────────────────────────

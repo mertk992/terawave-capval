@@ -126,6 +126,40 @@ with st.sidebar:
     st.divider()
     run_mc = st.button("▶ Run Full Analysis", type="primary", use_container_width=True)
 
+    # ── Editable Base Inputs ─────────────────────────────────────────────────
+    st.divider()
+    with st.expander("✏️ Edit Base Assumptions", expanded=False):
+        st.caption("Edit the underlying values directly. Multipliers still apply on top.")
+
+        st.markdown("**CapEx by Workstream ($M)**")
+        capex_overrides = {}
+        for item_name, item in config.CAPEX_ITEMS.items():
+            default = item.get("total_cost_m", item.get("unit_cost_m", 0) * item.get("units", 0))
+            short_name = item_name.replace("Satellite Manufacturing ", "Sat Mfg ")
+            val = st.number_input(
+                short_name, min_value=0.0, value=float(default), step=50.0,
+                key=f"capex_{item_name}", format="%.0f",
+            )
+            if val != default:
+                capex_overrides[item_name] = val
+
+        st.markdown("**Annual OpEx ($M/year)**")
+        opex_val = st.number_input(
+            "Base Annual OpEx", min_value=0.0, value=float(config.ANNUAL_OPEX_M),
+            step=25.0, key="opex_base", format="%.0f",
+        )
+        opex_override = opex_val if opex_val != config.ANNUAL_OPEX_M else None
+
+        st.markdown("**Revenue Ramp ($M by year)**")
+        revenue_overrides = {}
+        for yr, rev in config.REVENUE_RAMP.items():
+            val = st.number_input(
+                f"Year {yr} ({2025 + yr})", min_value=0.0, value=float(rev),
+                step=100.0, key=f"rev_{yr}", format="%.0f",
+            )
+            if val != rev:
+                revenue_overrides[yr] = val
+
 # ── Build Base Scenario ──────────────────────────────────────────────────────
 assumptions = ScenarioAssumptions(
     name="Interactive Scenario",
@@ -135,6 +169,9 @@ assumptions = ScenarioAssumptions(
     wacc=wacc,
     opex_multiplier=opex_mult,
     deployment_cadence=cadence,
+    capex_overrides=capex_overrides,
+    revenue_overrides=revenue_overrides,
+    opex_override=opex_override,
 )
 
 projection = build_full_projection(assumptions)

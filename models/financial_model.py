@@ -26,6 +26,10 @@ class ScenarioAssumptions:
     # Capital deployment acceleration levers
     parallel_workstreams: int = 3        # How many workstreams run concurrently
     deployment_cadence: str = "baseline" # "baseline", "aggressive", "conservative"
+    # Direct value overrides (from editable inputs panel)
+    capex_overrides: dict = field(default_factory=dict)   # {"item_name": total_cost_m}
+    revenue_overrides: dict = field(default_factory=dict)  # {year: revenue_m}
+    opex_override: Optional[float] = None                  # annual opex $M
 
 
 def compute_capex_schedule(assumptions: ScenarioAssumptions) -> pd.DataFrame:
@@ -34,8 +38,10 @@ def compute_capex_schedule(assumptions: ScenarioAssumptions) -> pd.DataFrame:
     records = []
 
     for item_name, item in config.CAPEX_ITEMS.items():
-        # Total cost for this item
-        if "total_cost_m" in item:
+        # Check for direct override first
+        if item_name in assumptions.capex_overrides:
+            total = assumptions.capex_overrides[item_name]
+        elif "total_cost_m" in item:
             total = item["total_cost_m"]
         else:
             total = item["unit_cost_m"] * item["units"]
@@ -80,8 +86,13 @@ def compute_capex_schedule(assumptions: ScenarioAssumptions) -> pd.DataFrame:
 
 def compute_revenue_schedule(assumptions: ScenarioAssumptions) -> pd.DataFrame:
     """Build year-by-year revenue projection."""
+    rev_ramp = dict(config.REVENUE_RAMP)
+    # Apply direct overrides
+    for yr, val in assumptions.revenue_overrides.items():
+        rev_ramp[int(yr)] = val
+
     records = []
-    for yr, rev in config.REVENUE_RAMP.items():
+    for yr, rev in rev_ramp.items():
         adj_yr = yr + assumptions.timeline_shift_years
         if 0 <= adj_yr <= config.PROJECTION_YEARS:
             records.append({
@@ -94,10 +105,11 @@ def compute_revenue_schedule(assumptions: ScenarioAssumptions) -> pd.DataFrame:
 def compute_opex_schedule(assumptions: ScenarioAssumptions) -> pd.DataFrame:
     """Build year-by-year OpEx schedule (starts when operations begin)."""
     ops_start = config.REVENUE_START_YEAR + assumptions.timeline_shift_years - 1
+    base_opex = assumptions.opex_override if assumptions.opex_override is not None else config.ANNUAL_OPEX_M
     records = []
     for yr in range(max(0, ops_start), config.PROJECTION_YEARS + 1):
         years_active = yr - ops_start
-        opex = config.ANNUAL_OPEX_M * assumptions.opex_multiplier * (
+        opex = base_opex * assumptions.opex_multiplier * (
             (1 + config.OPEX_GROWTH_RATE) ** years_active
         )
         records.append({"year": yr, "opex_m": opex})

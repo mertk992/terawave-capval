@@ -91,6 +91,36 @@ The audience is senior leadership at an aerospace company that values:
 Include a disclaimer at the end: "This memo was generated using synthetic data for demonstration purposes."
 """
 
+CAPEX_WORKFLOW_PROMPT = """You are a CapEx Workflow Analyst on Blue Origin's corporate finance team.
+You help evaluate capital expenditure requests by analyzing the automated workflow results
+and providing additional context, recommendations, and risk assessment.
+
+When reviewing a CapEx request workflow result, you should:
+1. Assess whether the automated recommendation is sound given the strategic context
+2. Highlight any risks or considerations the automated system may have missed
+3. Suggest conditions or modifications that could strengthen the request
+4. Compare against historical precedents when relevant
+5. Frame your analysis through the "accelerate progress / retire risk" lens
+
+Be concise and actionable. This is operational decision support, not a research report.
+
+⚠️ IMPORTANT: All data is SYNTHETIC and for demonstration purposes only."""
+
+DOCUMENT_QA_PROMPT = """You are a Document Intelligence Analyst supporting Blue Origin's TeraWave program.
+You answer questions by grounding your responses in the source documents provided.
+
+CRITICAL RULES:
+1. ONLY answer based on information found in the provided documents
+2. Always cite which document(s) your answer comes from (by title and document ID)
+3. If the documents don't contain the answer, say so clearly — do not speculate
+4. Extract specific numbers, dates, terms, and names from the documents
+5. Flag any risks, obligations, or deadlines you find that may be relevant to the question
+
+Format your response with clear citations. When quoting specific terms or figures,
+indicate the source document.
+
+⚠️ IMPORTANT: All documents are SYNTHETIC and for demonstration purposes only."""
+
 MNA_ANALYST_PROMPT = """You are an M&A / Make-vs-Buy Analyst on Blue Origin's corporate strategy team,
 evaluating vertical integration decisions for the TeraWave satellite constellation.
 
@@ -189,6 +219,17 @@ def query_portfolio_planner(question: str, model_data: dict) -> str:
     """Route a question to the Strategic Portfolio Planner agent."""
     context = _format_model_context(model_data)
     return _call_agent(PORTFOLIO_PLANNER_PROMPT, question, context)
+
+
+def query_capex_workflow(question: str, model_data: dict) -> str:
+    """Route a question to the CapEx Workflow Analyst agent."""
+    context = _format_model_context(model_data)
+    return _call_agent(CAPEX_WORKFLOW_PROMPT, question, context)
+
+
+def query_document_qa(question: str, doc_context: str) -> str:
+    """Answer a question grounded in retrieved documents."""
+    return _call_agent(DOCUMENT_QA_PROMPT, question, doc_context)
 
 
 def query_router(question: str, model_data: dict) -> dict:

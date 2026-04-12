@@ -39,6 +39,20 @@ from models.scenario_planner import (
     portfolio_summary,
     optimal_allocation,
 )
+from models.capex_workflow import (
+    CapExRequest,
+    run_capex_workflow,
+    get_historical_df,
+    get_budget_summary,
+    BUDGET_POOLS,
+    PRIORITY_TAGS,
+    URGENCY_LEVELS,
+)
+from models.rag_engine import (
+    search_documents,
+    get_all_documents,
+    format_context_for_llm,
+)
 from utils.charts import (
     cash_flow_waterfall,
     cumulative_investment_chart,
@@ -146,12 +160,14 @@ m4.metric("Total CapEx", f"${metrics['total_capex_m']:,.0f}M")
 m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
 
 # ── Tabs ─────────────────────────────────────────────────────────────────────
-tab_cashflow, tab_capital, tab_mc, tab_mna, tab_portfolio, tab_agent = st.tabs([
+tab_cashflow, tab_capital, tab_mc, tab_mna, tab_portfolio, tab_workflow, tab_docs, tab_agent = st.tabs([
     "💰 Cash Flow",
     "🎯 Capital Efficiency",
     "🎲 Monte Carlo",
     "🏢 Make vs Buy",
-    "📊 Portfolio Strategy",
+    "📊 Portfolio",
+    "📋 CapEx Workflow",
+    "📄 Doc Intelligence",
     "🤖 AI Agents",
 ])
 
@@ -353,7 +369,219 @@ with tab_portfolio:
                         f"Risk: {prog.risk_category}")
             st.markdown("---")
 
-# ── Tab 6: AI Agent Console ──────────────────────────────────────────────────
+# ── Tab 6: CapEx Workflow ────────────────────────────────────────────────────
+with tab_workflow:
+    st.markdown("""
+    ### Capital Expenditure Request Workflow
+    Submit a CapEx request and the system automatically **validates → analyzes →
+    compares → routes → recommends** — replacing the typical spreadsheet + email chain.
+    """)
+
+    wf_col1, wf_col2 = st.columns([2, 1])
+
+    with wf_col1:
+        st.subheader("Submit New Request")
+        with st.form("capex_form"):
+            req_title = st.text_input("Request Title", placeholder="e.g., Additional Optical Terminal Test Units")
+            req_desc = st.text_area("Description", placeholder="Brief description of what's being requested", height=80)
+            fc1, fc2 = st.columns(2)
+            req_pool = fc1.selectbox("Budget Pool", list(BUDGET_POOLS.keys()))
+            req_amount = fc2.number_input("Amount ($M)", min_value=0.1, max_value=500.0, value=10.0, step=0.5)
+            fc3, fc4, fc5 = st.columns(3)
+            req_priority = fc3.selectbox("Priority", PRIORITY_TAGS)
+            req_urgency = fc4.selectbox("Urgency", URGENCY_LEVELS)
+            req_months = fc5.number_input("Completion (months)", min_value=1, max_value=60, value=12)
+            req_justification = st.text_area(
+                "Justification — How does this accelerate progress or retire risk?",
+                placeholder="Explain why this investment is needed and what progress or risk retirement it enables...",
+                height=100,
+            )
+            req_requestor = st.text_input("Requestor", value="Demo User")
+            submitted = st.form_submit_button("▶ Run Workflow", type="primary", use_container_width=True)
+
+    with wf_col2:
+        st.subheader("Budget Status")
+        budget_df = get_budget_summary()
+        for _, row in budget_df.iterrows():
+            pool_name = row["Budget Pool"].replace("TeraWave — ", "")
+            utilization = float(row["Utilization"].strip("%"))
+            color = "🟢" if utilization < 70 else "🟡" if utilization < 90 else "🔴"
+            st.markdown(f"{color} **{pool_name}** — ${row['Available ($M)']:,.0f}M avail ({row['Utilization']})")
+
+    # Process workflow
+    if submitted:
+        request = CapExRequest(
+            id=f"CR-2026-{np.random.randint(100, 999)}",
+            title=req_title,
+            description=req_desc,
+            requestor=req_requestor,
+            department="TeraWave Program",
+            budget_pool=req_pool,
+            amount_m=req_amount,
+            priority_tag=req_priority,
+            urgency=req_urgency,
+            justification=req_justification,
+            expected_completion_months=req_months,
+            submission_date="2026-04-12",
+        )
+
+        result = run_capex_workflow(request)
+        st.session_state["wf_result"] = result
+
+    if "wf_result" in st.session_state:
+        result = st.session_state["wf_result"]
+        st.divider()
+
+        # Recommendation banner
+        rec = result.recommendation
+        rec_colors = {"Approve": "🟢", "Approve with Conditions": "🟡", "Defer": "🟠", "Reject": "🔴"}
+        st.subheader(f"{rec_colors.get(rec, '⚪')} Recommendation: {rec}")
+        st.markdown(f"*{result.recommendation_rationale}*")
+
+        if result.conditions:
+            st.markdown("**Conditions:**")
+            for cond in result.conditions:
+                st.markdown(f"- {cond}")
+        if result.risk_flags:
+            st.markdown("**Risk Flags:**")
+            for flag in result.risk_flags:
+                st.markdown(f"- ⚠️ {flag}")
+
+        # Metrics row
+        wr1, wr2, wr3, wr4, wr5 = st.columns(5)
+        wr1.metric("NPV Impact", f"${result.npv_impact_m:,.1f}M")
+        wr2.metric("ROI", f"{result.roi_pct:.0f}%")
+        wr3.metric("Payback", f"{result.payback_months} mo")
+        wr4.metric("Approval Tier", f"T{result.approval_tier}: {result.approval_tier_label}")
+        wr5.metric("SLA", f"{result.sla_days} days")
+
+        # Progress scores
+        ps1, ps2, ps3 = st.columns(3)
+        ps1.metric("Progress Score", f"{result.progress_score:.1f}")
+        ps2.metric("Risk Retirement Score", f"{result.risk_retirement_score:.1f}")
+        ps3.metric("Budget Status", result.budget_status)
+
+        # Workflow audit trail
+        st.subheader("Workflow Audit Trail")
+        for step in result.workflow_steps:
+            icon = "✅" if step["status"] in ["Passed", "Complete", "Within Budget"] else "⚠️" if "Condition" in step.get("status", "") or "Near" in step.get("status", "") else "❌" if step["status"] == "Failed" else "📋"
+            with st.expander(f"{icon} {step['step']} — {step['status']}"):
+                st.markdown(step["details"])
+
+        # Comparable requests
+        if result.comparables:
+            st.subheader("Comparable Past Requests")
+            comp_df = pd.DataFrame(result.comparables)
+            display_cols = ["id", "title", "amount_m", "priority_tag", "status", "outcome"]
+            available_cols = [c for c in display_cols if c in comp_df.columns]
+            st.dataframe(comp_df[available_cols], use_container_width=True, hide_index=True)
+
+        # AI analysis button
+        if config.ANTHROPIC_API_KEY:
+            if st.button("🤖 Get AI Analysis of This Request", key="wf_ai"):
+                with st.spinner("Agent analyzing..."):
+                    from agents.orchestrator import query_capex_workflow
+                    wf_context = f"""
+Request: {result.request.title}
+Amount: ${result.request.amount_m}M | Pool: {result.request.budget_pool}
+Priority: {result.request.priority_tag} | Urgency: {result.request.urgency}
+Justification: {result.request.justification}
+Automated Recommendation: {result.recommendation}
+NPV Impact: ${result.npv_impact_m}M | ROI: {result.roi_pct}% | Payback: {result.payback_months} months
+Budget Status: {result.budget_status} | Available: ${result.budget_available_m}M
+Risk Flags: {'; '.join(result.risk_flags) if result.risk_flags else 'None'}
+"""
+                    model_data_wf = {"capex_workflow_context": wf_context}
+                    ai_response = query_capex_workflow(
+                        f"Review this CapEx request and provide your analysis:\n{wf_context}",
+                        model_data_wf
+                    )
+                    st.markdown(ai_response)
+
+    # Historical requests table
+    with st.expander("📋 Historical CapEx Requests"):
+        st.dataframe(get_historical_df(), use_container_width=True, hide_index=True)
+
+# ── Tab 7: Document Intelligence ─────────────────────────────────────────────
+with tab_docs:
+    st.markdown("""
+    ### Document Intelligence (RAG)
+    Search and query across TeraWave program documents — contracts, vendor memos,
+    policy docs, technical reports, and pipeline reviews. AI answers are **grounded
+    in source documents** with citations.
+    """)
+
+    # Document library
+    all_docs = get_all_documents()
+    doc_col1, doc_col2 = st.columns([1, 2])
+
+    with doc_col1:
+        st.subheader("Document Library")
+        doc_type_icons = {"contract": "📝", "memo": "📋", "report": "📊", "policy": "📜", "proposal": "💼"}
+        for doc in all_docs:
+            icon = doc_type_icons.get(doc.doc_type, "📄")
+            with st.expander(f"{icon} {doc.title[:50]}..."):
+                st.markdown(f"**Type:** {doc.doc_type.title()} | **Source:** {doc.source} | **Date:** {doc.date}")
+                if doc.metadata:
+                    meta_str = " | ".join(f"{k}: {v}" for k, v in doc.metadata.items())
+                    st.markdown(f"**Metadata:** {meta_str}")
+                st.markdown(f"*{len(doc.content)} characters*")
+
+    with doc_col2:
+        st.subheader("Query Documents")
+
+        # Suggested searches
+        if "doc_query" not in st.session_state:
+            st.markdown("**Try these queries:**")
+            doc_suggestions = [
+                "What are the SLA requirements in the DataLink ground services contract?",
+                "Which vendor was selected for the MEO satellite bus and why?",
+                "What is the capital allocation policy for emergency requests?",
+                "What are the key risks for the optical inter-satellite link system?",
+                "What is the enterprise customer pipeline value and which segments are largest?",
+                "How many launches are needed for the full constellation?",
+            ]
+            dcols = st.columns(2)
+            for i, sug in enumerate(doc_suggestions):
+                if dcols[i % 2].button(sug, key=f"doc_sug_{i}", use_container_width=True):
+                    st.session_state["doc_query"] = sug
+                    st.rerun()
+
+        query = st.text_input("Search documents...", value=st.session_state.get("doc_query", ""),
+                              placeholder="Ask anything about TeraWave program documents...")
+
+        if query:
+            # Retrieve relevant documents
+            results = search_documents(query, top_k=3)
+
+            if results:
+                st.markdown(f"**Found {len(results)} relevant document(s)**")
+
+                # Show retrieved chunks with relevance scores
+                for doc, score in results:
+                    icon = doc_type_icons.get(doc.doc_type, "📄")
+                    with st.expander(f"{icon} {doc.title} — Relevance: {score:.0%}", expanded=(score > 0.2)):
+                        st.markdown(f"**{doc.doc_type.title()}** | {doc.source} | {doc.date}")
+                        # Show content preview (first 1000 chars)
+                        preview = doc.content[:1500] + ("..." if len(doc.content) > 1500 else "")
+                        st.text(preview)
+
+                # AI-powered Q&A
+                st.divider()
+                if config.ANTHROPIC_API_KEY:
+                    with st.spinner("AI analyzing documents..."):
+                        from agents.orchestrator import query_document_qa
+                        doc_context = format_context_for_llm(results)
+                        answer = query_document_qa(query, doc_context)
+                        st.markdown("### AI Answer (Grounded in Documents)")
+                        st.markdown(answer)
+                else:
+                    st.info("Set `ANTHROPIC_API_KEY` to enable AI-powered document Q&A. "
+                            "The retrieval system above works without the API key.")
+            else:
+                st.warning("No relevant documents found. Try a different query.")
+
+# ── Tab 8: AI Agent Console ──────────────────────────────────────────────────
 with tab_agent:
     st.markdown("""
     ### AI Agent Console

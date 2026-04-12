@@ -3,6 +3,8 @@ Chart utilities for the TeraWave Capital Valuation dashboard.
 All charts use Plotly for interactivity.
 """
 
+from __future__ import annotations
+
 import plotly.graph_objects as go
 import plotly.express as px
 import numpy as np

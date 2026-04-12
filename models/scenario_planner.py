@@ -7,6 +7,8 @@ program bets. Evaluates portfolio-level capital allocation.
 ⚠️ ALL DATA IS SYNTHETIC FOR DEMONSTRATION PURPOSES ONLY.
 """
 
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field

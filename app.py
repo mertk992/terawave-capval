@@ -190,9 +190,8 @@ m4.metric("Total CapEx", f"${metrics['total_capex_m']:,.0f}M")
 m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
 
 # ── Tabs ─────────────────────────────────────────────────────────────────────
-tab_cashflow, tab_capital, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent = st.tabs([
+tab_cashflow, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent = st.tabs([
     "💰 Cash Flow",
-    "🎯 Capital Efficiency",
     "🎲 Monte Carlo",
     "📈 Variance",
     "📋 CapEx Workflow",
@@ -217,36 +216,7 @@ with tab_cashflow:
             display_df[col] = display_df[col].apply(lambda x: f"${x:,.1f}M")
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-# ── Tab 2: Capital Efficiency ────────────────────────────────────────────────
-with tab_capital:
-    st.markdown("""
-    ### Capital Allocation Framework
-    > *"The goal is not cost suppression — it's accelerating the deployment of capital where
-    > we earn the most progress or retire the most risk per dollar."*
-
-    The chart below maps each workstream by its **progress contribution** and **risk retirement value**
-    per billion dollars deployed. Bubble size = total CapEx. Color = composite efficiency score.
-    """)
-
-    st.plotly_chart(progress_per_dollar_chart(progress_df), use_container_width=True)
-
-    st.subheader("Workstream Efficiency Rankings")
-    ranking_df = progress_df[[
-        "workstream", "description", "total_capex_m",
-        "progress_per_bn", "risk_retired_per_bn", "composite_score"
-    ]].copy()
-    ranking_df.columns = [
-        "Workstream", "Description", "Total CapEx ($M)",
-        "Progress / $B", "Risk Retired / $B", "Composite Score"
-    ]
-    st.dataframe(ranking_df, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-    st.subheader("Sensitivity Analysis")
-    tornado_df = tornado_analysis(assumptions)
-    st.plotly_chart(tornado_chart(tornado_df), use_container_width=True)
-
-# ── Tab 3: Monte Carlo ──────────────────────────────────────────────────────
+# ── Tab 2: Monte Carlo ──────────────────────────────────────────────────────
 with tab_mc:
     if run_mc or "mc_results" in st.session_state:
         if run_mc:

@@ -12,6 +12,7 @@ Run: streamlit run app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
+import json
 import sys
 import os
 
@@ -39,6 +40,12 @@ from models.rag_engine import (
     search_documents,
     get_all_documents,
     format_context_for_llm,
+)
+from agents.agentic_engine import (
+    run_capex_analysis,
+    run_general_query,
+    AgentStep,
+    AgentResult,
 )
 from models.variance_engine import (
     build_variance_table,
@@ -80,6 +87,20 @@ st.markdown("""
     .agent-badge {
         display: inline-block; background: #0066CC; color: white; padding: 2px 10px;
         border-radius: 12px; font-size: 0.8em; font-weight: 600; margin-bottom: 8px;
+    }
+    .tool-badge {
+        display: inline-block; background: #1a1a2e; border: 1px solid #00A3E0;
+        color: #00A3E0; padding: 2px 8px; border-radius: 6px; font-size: 0.75em;
+        font-family: monospace; margin: 2px;
+    }
+    .step-header {
+        display: flex; align-items: center; gap: 8px;
+        font-weight: 600; font-size: 0.95em;
+    }
+    .agentic-banner {
+        background: linear-gradient(135deg, #0a1628, #1a1a2e);
+        border: 1px solid #0066CC; border-radius: 8px;
+        padding: 12px 16px; margin-bottom: 16px; font-size: 0.9em;
     }
     .header-subtitle { color: #95A5A6; font-size: 1.1em; margin-top: -10px; }
     div[data-testid="stSidebar"] { background-color: #0a0e14; }
@@ -371,10 +392,21 @@ Frame overspends through the 'accelerating progress' lens where justified.
 # ── Tab 5: CapEx Workflow ────────────────────────────────────────────────────
 with tab_workflow:
     st.markdown("""
-    ### Capital Expenditure Request Workflow
-    Submit a CapEx request and the system automatically **validates → analyzes →
-    compares → routes → recommends** — replacing the typical spreadsheet + email chain.
+    ### Agentic Capital Expenditure Workflow
+    Submit a CapEx request and an **autonomous AI agent** evaluates it — choosing which
+    tools to call, chaining analyses, and producing a recommendation. Watch the agent
+    think in real-time.
     """)
+
+    st.markdown(
+        '<div class="agentic-banner">'
+        '🤖 <strong>How this works:</strong> The agent receives your request and a set of tools '
+        '(budget checker, financial analyzer, document search, comparable finder, approval router, '
+        'variance checker). It autonomously decides which tools to call, interprets results, and '
+        'chains additional calls based on what it discovers. This is <strong>genuine agentic AI</strong> — '
+        'the reasoning path is not hardcoded.</div>',
+        unsafe_allow_html=True,
+    )
 
     wf_col1, wf_col2 = st.columns([2, 1])
 
@@ -396,7 +428,7 @@ with tab_workflow:
                 height=100,
             )
             req_requestor = st.text_input("Requestor", value="Demo User")
-            submitted = st.form_submit_button("▶ Run Workflow", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("▶ Run Agentic Analysis", type="primary", use_container_width=True)
 
     with wf_col2:
         st.subheader("Budget Status")
@@ -407,31 +439,146 @@ with tab_workflow:
             color = "🟢" if utilization < 70 else "🟡" if utilization < 90 else "🔴"
             st.markdown(f"{color} **{pool_name}** — ${row['Available ($M)']:,.0f}M avail ({row['Utilization']})")
 
-    # Process workflow
+        st.divider()
+        st.markdown("**Available Agent Tools:**")
+        tool_names = [
+            ("check_budget", "Budget pool status"),
+            ("search_documents", "RAG document search"),
+            ("get_comparable_requests", "Historical precedent"),
+            ("run_financial_impact", "NPV / ROI analysis"),
+            ("check_approval_routing", "Approval tier & SLA"),
+            ("get_variance_status", "YTD variance check"),
+        ]
+        for name, desc in tool_names:
+            st.markdown(f'<span class="tool-badge">{name}</span> {desc}', unsafe_allow_html=True)
+
+    # Process agentic workflow
     if submitted:
-        request = CapExRequest(
-            id=f"CR-2026-{np.random.randint(100, 999)}",
-            title=req_title,
-            description=req_desc,
-            requestor=req_requestor,
-            department="TeraWave Program",
-            budget_pool=req_pool,
-            amount_m=req_amount,
-            priority_tag=req_priority,
-            urgency=req_urgency,
-            justification=req_justification,
-            expected_completion_months=req_months,
-            submission_date="2026-04-12",
-        )
-
-        result = run_capex_workflow(request)
-        st.session_state["wf_result"] = result
-
-    if "wf_result" in st.session_state:
-        result = st.session_state["wf_result"]
         st.divider()
 
-        # Recommendation banner
+        if not config.ANTHROPIC_API_KEY:
+            st.warning(
+                "Set your `ANTHROPIC_API_KEY` to enable the agentic workflow. "
+                "Showing rule-based fallback instead."
+            )
+            # Fallback to rule-based workflow
+            request = CapExRequest(
+                id=f"CR-2026-{np.random.randint(100, 999)}",
+                title=req_title,
+                description=req_desc,
+                requestor=req_requestor,
+                department="TeraWave Program",
+                budget_pool=req_pool,
+                amount_m=req_amount,
+                priority_tag=req_priority,
+                urgency=req_urgency,
+                justification=req_justification,
+                expected_completion_months=req_months,
+                submission_date="2026-04-12",
+            )
+            result = run_capex_workflow(request)
+            st.session_state["wf_result_fallback"] = result
+        else:
+            # Run the REAL agentic workflow
+            steps_container = st.container()
+            agent_status = st.status("🤖 Agent analyzing request...", expanded=True)
+
+            with agent_status:
+                st.markdown(f"**Request:** {req_title} — ${req_amount}M")
+                st.markdown(f"**Pool:** {req_pool} | **Priority:** {req_priority} | **Urgency:** {req_urgency}")
+                st.divider()
+
+                step_placeholders = []
+
+                def on_agent_step(step: AgentStep):
+                    """Real-time callback to display each agent step."""
+                    if step.step_type == "thinking":
+                        # Show agent reasoning
+                        st.markdown(f"**💭 Agent Reasoning**")
+                        # Only show first 500 chars of intermediate reasoning
+                        preview = step.content[:500] + ("..." if len(step.content) > 500 else "")
+                        st.markdown(preview)
+                        st.divider()
+
+                    elif step.step_type == "tool_call":
+                        st.markdown(
+                            f'**🔧 Tool Call:** <span class="tool-badge">{step.tool_name}</span>',
+                            unsafe_allow_html=True,
+                        )
+                        st.code(step.content, language="json")
+
+                    elif step.step_type == "tool_result":
+                        with st.expander(f"📥 Result from {step.tool_name}", expanded=False):
+                            try:
+                                parsed = json.loads(step.content)
+                                st.json(parsed)
+                            except Exception:
+                                st.text(step.content)
+                        st.divider()
+
+                agent_result = run_capex_analysis(
+                    title=req_title,
+                    description=req_desc,
+                    amount_m=req_amount,
+                    budget_pool=req_pool,
+                    priority_tag=req_priority,
+                    urgency=req_urgency,
+                    justification=req_justification,
+                    completion_months=req_months,
+                    requestor=req_requestor,
+                    on_step=on_agent_step,
+                )
+
+                # Update status
+                if agent_result.error:
+                    agent_status.update(label="❌ Agent encountered an error", state="error")
+                else:
+                    agent_status.update(
+                        label=f"✅ Analysis complete — {agent_result.total_tool_calls} tool calls in {agent_result.total_duration_ms / 1000:.1f}s",
+                        state="complete",
+                    )
+
+            st.session_state["agent_result"] = agent_result
+
+    # Display agentic result
+    if "agent_result" in st.session_state:
+        agent_result = st.session_state["agent_result"]
+
+        if not agent_result.error:
+            # Metrics bar
+            ar1, ar2, ar3 = st.columns(3)
+            ar1.metric("Tool Calls", agent_result.total_tool_calls)
+            ar2.metric("Reasoning Rounds", sum(1 for s in agent_result.steps if s.step_type == "thinking"))
+            ar3.metric("Total Time", f"{agent_result.total_duration_ms / 1000:.1f}s")
+
+            # Final recommendation
+            st.subheader("Agent Recommendation")
+            st.markdown(agent_result.final_answer)
+
+            # Full reasoning chain (collapsed)
+            with st.expander("🔍 Full Agent Reasoning Chain", expanded=False):
+                for step in agent_result.steps:
+                    if step.step_type == "tool_call":
+                        st.markdown(f'**🔧 {step.title}**')
+                        st.code(step.content, language="json")
+                    elif step.step_type == "tool_result":
+                        st.markdown(f'**📥 {step.title}**')
+                        try:
+                            st.json(json.loads(step.content))
+                        except Exception:
+                            st.text(step.content[:500])
+                    elif step.step_type == "thinking":
+                        st.markdown(f'**💭 {step.title}**')
+                        st.markdown(step.content[:300] + ("..." if len(step.content) > 300 else ""))
+                    st.divider()
+        else:
+            st.error(f"Agent error: {agent_result.error}")
+
+    # Fallback rule-based result display
+    if "wf_result_fallback" in st.session_state:
+        result = st.session_state["wf_result_fallback"]
+        st.divider()
+
         rec = result.recommendation
         rec_colors = {"Approve": "🟢", "Approve with Conditions": "🟡", "Defer": "🟠", "Reject": "🔴"}
         st.subheader(f"{rec_colors.get(rec, '⚪')} Recommendation: {rec}")
@@ -441,12 +588,7 @@ with tab_workflow:
             st.markdown("**Conditions:**")
             for cond in result.conditions:
                 st.markdown(f"- {cond}")
-        if result.risk_flags:
-            st.markdown("**Risk Flags:**")
-            for flag in result.risk_flags:
-                st.markdown(f"- ⚠️ {flag}")
 
-        # Metrics row
         wr1, wr2, wr3, wr4, wr5 = st.columns(5)
         wr1.metric("NPV Impact", f"${result.npv_impact_m:,.1f}M")
         wr2.metric("ROI", f"{result.roi_pct:.0f}%")
@@ -454,48 +596,11 @@ with tab_workflow:
         wr4.metric("Approval Tier", f"T{result.approval_tier}: {result.approval_tier_label}")
         wr5.metric("SLA", f"{result.sla_days} days")
 
-        # Progress scores
-        ps1, ps2, ps3 = st.columns(3)
-        ps1.metric("Progress Score", f"{result.progress_score:.1f}")
-        ps2.metric("Risk Retirement Score", f"{result.risk_retirement_score:.1f}")
-        ps3.metric("Budget Status", result.budget_status)
-
-        # Workflow audit trail
         st.subheader("Workflow Audit Trail")
         for step in result.workflow_steps:
             icon = "✅" if step["status"] in ["Passed", "Complete", "Within Budget"] else "⚠️" if "Condition" in step.get("status", "") or "Near" in step.get("status", "") else "❌" if step["status"] == "Failed" else "📋"
             with st.expander(f"{icon} {step['step']} — {step['status']}"):
                 st.markdown(step["details"])
-
-        # Comparable requests
-        if result.comparables:
-            st.subheader("Comparable Past Requests")
-            comp_df = pd.DataFrame(result.comparables)
-            display_cols = ["id", "title", "amount_m", "priority_tag", "status", "outcome"]
-            available_cols = [c for c in display_cols if c in comp_df.columns]
-            st.dataframe(comp_df[available_cols], use_container_width=True, hide_index=True)
-
-        # AI analysis button
-        if config.ANTHROPIC_API_KEY:
-            if st.button("🤖 Get AI Analysis of This Request", key="wf_ai"):
-                with st.spinner("Agent analyzing..."):
-                    from agents.orchestrator import query_capex_workflow
-                    wf_context = f"""
-Request: {result.request.title}
-Amount: ${result.request.amount_m}M | Pool: {result.request.budget_pool}
-Priority: {result.request.priority_tag} | Urgency: {result.request.urgency}
-Justification: {result.request.justification}
-Automated Recommendation: {result.recommendation}
-NPV Impact: ${result.npv_impact_m}M | ROI: {result.roi_pct}% | Payback: {result.payback_months} months
-Budget Status: {result.budget_status} | Available: ${result.budget_available_m}M
-Risk Flags: {'; '.join(result.risk_flags) if result.risk_flags else 'None'}
-"""
-                    model_data_wf = {"capex_workflow_context": wf_context}
-                    ai_response = query_capex_workflow(
-                        f"Review this CapEx request and provide your analysis:\n{wf_context}",
-                        model_data_wf
-                    )
-                    st.markdown(ai_response)
 
     # Historical requests table
     with st.expander("📋 Historical CapEx Requests"):
@@ -583,16 +688,19 @@ with tab_docs:
 # ── Tab 8: AI Agent Console ──────────────────────────────────────────────────
 with tab_agent:
     st.markdown("""
-    ### AI Agent Console
-    Ask questions and the system routes to the appropriate specialized agent:
-    - **Capital Allocation Analyst** — workstream prioritization, deployment strategy
-    - **Risk & Scenario Agent** — Monte Carlo interpretation, tail risk analysis
-    - **CapEx Workflow Analyst** — reviews capital expenditure requests
-    - **Document Intelligence** — answers questions grounded in source documents
-    - **Investment Memo Writer** — generate board-ready investment memos
-
-    *Powered by Claude (Anthropic)*
+    ### Agentic AI Console
+    Ask questions and an **autonomous agent** decides which tools to use, gathers data,
+    and chains reasoning to answer. Watch the agent's tool calls and reasoning in real-time.
     """)
+
+    st.markdown(
+        '<div class="agentic-banner">'
+        '🧠 <strong>Agentic Architecture:</strong> Unlike a chatbot, this agent has <strong>tools</strong> '
+        'it can call autonomously. It plans what data it needs, calls tools (budget checker, document search, '
+        'financial analyzer, etc.), interprets results, and chains follow-up calls based on what it discovers. '
+        'The reasoning path is <strong>not hardcoded</strong> — it varies per query.</div>',
+        unsafe_allow_html=True,
+    )
 
     # Build model data context for agents
     model_data = {
@@ -604,6 +712,15 @@ with tab_agent:
     if "mc_results" in st.session_state:
         model_data["mc_summary"] = st.session_state["mc_results"].summary
 
+    # Agent mode toggle
+    agent_mode = st.radio(
+        "Agent Mode",
+        ["🔧 Agentic (Tool Use)", "💬 Direct (No Tools)"],
+        horizontal=True,
+        help="Agentic mode lets the agent autonomously call tools. Direct mode is a simple chat.",
+    )
+    use_agentic = agent_mode.startswith("🔧")
+
     # Chat interface
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -614,19 +731,24 @@ with tab_agent:
             if "agent" in msg:
                 st.markdown(f'<span class="agent-badge">{msg["agent"]}</span>',
                             unsafe_allow_html=True)
+            if "tool_calls" in msg and msg["tool_calls"] > 0:
+                st.caption(f"🔧 {msg['tool_calls']} tool calls | ⏱️ {msg.get('duration', 'N/A')}")
             st.markdown(msg["content"])
 
     # Suggested prompts
     if not st.session_state.messages:
         st.markdown("**Suggested queries:**")
-        row1 = st.columns(3)
+        row1 = st.columns(2)
+        row2 = st.columns(2)
         suggestions = [
-            "Which workstreams should we accelerate investment in?",
-            "What are the top risk factors driving NPV variance?",
-            "Generate an investment memo for the TeraWave program.",
+            "What's the budget status for Ground Segment & Gateways, and are there any variance concerns?",
+            "Which workstreams should we accelerate investment in based on progress-per-dollar?",
+            "Search for the DataLink ground services contract and summarize the key SLA terms.",
+            "What approval tier would a $25M Critical Path request route to?",
         ]
         for i, sug in enumerate(suggestions):
-            if row1[i].button(sug, key=f"sug_{i}", use_container_width=True):
+            row = row1 if i < 2 else row2
+            if row[i % 2].button(sug, key=f"sug_{i}", use_container_width=True):
                 st.session_state["pending_query"] = sug
                 st.rerun()
 
@@ -636,10 +758,9 @@ with tab_agent:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
-        _process_agent_query(prompt, model_data) if False else None  # handled below
 
     # Chat input
-    if prompt := st.chat_input("Ask about TeraWave capital allocation, risk, or request a memo..."):
+    if prompt := st.chat_input("Ask about TeraWave — the agent will gather data autonomously..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -657,17 +778,15 @@ with tab_agent:
                     "Set your `ANTHROPIC_API_KEY` environment variable to enable the AI agents. "
                     "Example: `export ANTHROPIC_API_KEY=sk-ant-...`"
                 )
-                st.markdown("**Demo mode:** Showing agent routing logic. "
-                            f"This query would be routed to the appropriate agent based on keywords.")
-                # Show which agent would be selected
+                st.markdown("**Demo mode:** Showing agent routing logic.")
                 question_lower = user_msg.lower()
                 if any(kw in question_lower for kw in ["memo", "report", "write", "document", "board"]):
                     agent_name = "Investment Memo Writer"
-                elif any(kw in question_lower for kw in ["risk", "monte carlo", "probability", "tail", "p90", "p10", "simulation", "uncertainty"]):
+                elif any(kw in question_lower for kw in ["risk", "monte carlo", "probability", "tail", "p90"]):
                     agent_name = "Risk & Scenario Agent"
                 elif any(kw in question_lower for kw in ["capex", "request", "approval", "workflow"]):
                     agent_name = "CapEx Workflow Analyst"
-                elif any(kw in question_lower for kw in ["contract", "vendor", "policy", "document", "sla"]):
+                elif any(kw in question_lower for kw in ["contract", "vendor", "policy", "sla"]):
                     agent_name = "Document Intelligence"
                 else:
                     agent_name = "Capital Allocation Analyst"
@@ -677,7 +796,52 @@ with tab_agent:
                     "content": f"[API key required — would route to **{agent_name}**]",
                     "agent": agent_name,
                 })
+            elif use_agentic:
+                # AGENTIC MODE — agent autonomously uses tools
+                agent_status = st.status("🤖 Agent working...", expanded=True)
+
+                with agent_status:
+                    def on_console_step(step):
+                        if step.step_type == "tool_call":
+                            st.markdown(
+                                f'🔧 Calling <span class="tool-badge">{step.tool_name}</span>',
+                                unsafe_allow_html=True,
+                            )
+                            st.code(step.content, language="json")
+                        elif step.step_type == "tool_result":
+                            with st.expander(f"📥 {step.tool_name} result", expanded=False):
+                                try:
+                                    st.json(json.loads(step.content))
+                                except Exception:
+                                    st.text(step.content[:300])
+
+                    agent_result = run_general_query(user_msg, on_step=on_console_step)
+
+                if agent_result.error:
+                    agent_status.update(label="❌ Error", state="error")
+                    st.error(agent_result.error)
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": f"Error: {agent_result.error}",
+                        "agent": "Agentic Engine",
+                    })
+                else:
+                    agent_status.update(
+                        label=f"✅ Done — {agent_result.total_tool_calls} tool calls, {agent_result.total_duration_ms / 1000:.1f}s",
+                        state="complete",
+                    )
+                    st.markdown(f'<span class="agent-badge">Agentic Engine</span>', unsafe_allow_html=True)
+                    st.caption(f"🔧 {agent_result.total_tool_calls} tool calls | ⏱️ {agent_result.total_duration_ms / 1000:.1f}s")
+                    st.markdown(agent_result.final_answer)
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": agent_result.final_answer,
+                        "agent": "Agentic Engine",
+                        "tool_calls": agent_result.total_tool_calls,
+                        "duration": f"{agent_result.total_duration_ms / 1000:.1f}s",
+                    })
             else:
+                # DIRECT MODE — simple agent routing without tools
                 with st.spinner("Agent analyzing..."):
                     from agents.orchestrator import query_router
                     result = query_router(user_msg, model_data)

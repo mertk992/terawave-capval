@@ -12,29 +12,51 @@ import pandas as pd
 
 
 COLORS = {
-    "primary": "#0066CC",
-    "secondary": "#00A3E0",
-    "accent": "#FF6B35",
-    "positive": "#2ECC71",
-    "negative": "#E74C3C",
-    "neutral": "#95A5A6",
+    "primary": "#4A9EFF",
+    "secondary": "#7AB8FF",
+    "accent": "#D4A574",
+    "positive": "#52C7A0",
+    "negative": "#E07B7B",
+    "neutral": "#6C7686",
+    "muted": "#8B95A7",
     "bg": "#0E1117",
-    "text": "#FAFAFA",
-    "grid": "#1E2530",
+    "text": "#D1D5DB",
+    "title": "#E5E7EB",
+    "grid": "#1F2937",
 }
 
+CATEGORICAL = [
+    "#4A9EFF", "#7AB8FF", "#52C7A0", "#D4A574",
+    "#B794F4", "#8B95A7", "#F6AD55", "#9FB1C7",
+]
 
-def _base_layout(title: str, height: int = 450) -> dict:
+
+def _base_layout(title: str, height: int = 420) -> dict:
     return dict(
-        title=dict(text=title, font=dict(size=16, color=COLORS["text"])),
+        title=dict(
+            text=title,
+            font=dict(size=14, color=COLORS["title"], family="Inter, system-ui, sans-serif"),
+            x=0.0, xanchor="left", pad=dict(l=8, t=4),
+        ),
         height=height,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=COLORS["text"], size=12),
-        xaxis=dict(gridcolor=COLORS["grid"], zerolinecolor=COLORS["grid"]),
-        yaxis=dict(gridcolor=COLORS["grid"], zerolinecolor=COLORS["grid"]),
-        margin=dict(l=60, r=40, t=50, b=40),
-        legend=dict(bgcolor="rgba(0,0,0,0)"),
+        font=dict(color=COLORS["text"], size=12, family="Inter, system-ui, sans-serif"),
+        xaxis=dict(
+            gridcolor=COLORS["grid"], zerolinecolor=COLORS["grid"],
+            linecolor=COLORS["grid"], tickfont=dict(color=COLORS["muted"], size=11),
+            title=dict(font=dict(color=COLORS["muted"], size=11)),
+        ),
+        yaxis=dict(
+            gridcolor=COLORS["grid"], zerolinecolor=COLORS["grid"],
+            linecolor=COLORS["grid"], tickfont=dict(color=COLORS["muted"], size=11),
+            title=dict(font=dict(color=COLORS["muted"], size=11)),
+        ),
+        margin=dict(l=60, r=30, t=44, b=40),
+        legend=dict(
+            bgcolor="rgba(0,0,0,0)", font=dict(color=COLORS["muted"], size=11),
+            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0,
+        ),
     )
 
 
@@ -87,7 +109,7 @@ def cumulative_investment_chart(projection: pd.DataFrame) -> go.Figure:
         y=projection["cumulative_investment_m"],
         name="Cumulative Investment",
         fill="tozeroy",
-        fillcolor="rgba(231, 76, 60, 0.15)",
+        fillcolor="rgba(224, 123, 123, 0.12)",
         line=dict(color=COLORS["negative"], width=2),
     ))
     fig.add_trace(go.Scatter(
@@ -95,7 +117,7 @@ def cumulative_investment_chart(projection: pd.DataFrame) -> go.Figure:
         y=projection["cumulative_fcf_m"],
         name="Cumulative FCF",
         fill="tozeroy",
-        fillcolor="rgba(46, 204, 113, 0.15)",
+        fillcolor="rgba(82, 199, 160, 0.12)",
         line=dict(color=COLORS["positive"], width=2),
     ))
 
@@ -207,7 +229,6 @@ def capex_by_workstream_chart(capex_df: pd.DataFrame) -> go.Figure:
     pivot.index = [2025 + yr for yr in pivot.index]
 
     fig = go.Figure()
-    colors = px.colors.qualitative.Set2
 
     for i, col in enumerate(pivot.columns):
         fig.add_trace(go.Scatter(
@@ -215,8 +236,8 @@ def capex_by_workstream_chart(capex_df: pd.DataFrame) -> go.Figure:
             y=pivot[col],
             name=col.replace("Satellite Manufacturing ", "Sat Mfg "),
             stackgroup="one",
-            fillcolor=colors[i % len(colors)],
-            line=dict(width=0.5),
+            fillcolor=CATEGORICAL[i % len(CATEGORICAL)],
+            line=dict(width=0.5, color=CATEGORICAL[i % len(CATEGORICAL)]),
         ))
 
     layout = _base_layout("Capital Deployment by Workstream ($M)")
@@ -319,7 +340,7 @@ def budget_vs_actual_trend(trend_df: pd.DataFrame, ws_name: str) -> go.Figure:
         x=list(trend_df["Month"]) + list(trend_df["Month"])[::-1],
         y=list(trend_df["Actual ($M)"]) + list(trend_df["Budget ($M)"])[::-1],
         fill="toself",
-        fillcolor="rgba(231, 76, 60, 0.1)",
+        fillcolor="rgba(224, 123, 123, 0.08)",
         line=dict(width=0),
         showlegend=False,
     ))
@@ -338,11 +359,11 @@ def cumulative_variance_chart(trend_df: pd.DataFrame, ws_name: str) -> go.Figure
     fig.add_trace(go.Scatter(
         x=trend_df["Month"], y=trend_df["Cum Budget ($M)"],
         name="Cum Budget", line=dict(color=COLORS["neutral"], dash="dash", width=2),
-        fill="tozeroy", fillcolor="rgba(149, 165, 166, 0.1)",
+        fill="tozeroy", fillcolor="rgba(108, 118, 134, 0.08)",
     ))
     fig.add_trace(go.Scatter(
         x=trend_df["Month"], y=trend_df["Cum Actual ($M)"],
-        name="Cum Actual", line=dict(color=COLORS["accent"], width=3),
+        name="Cum Actual", line=dict(color=COLORS["primary"], width=3),
     ))
 
     short_name = ws_name.replace("Satellite Manufacturing ", "Sat Mfg ")

@@ -4,7 +4,7 @@ TeraWave Capital Project Valuation Engine
 An agentic AI system for capital allocation analysis on Blue Origin's
 TeraWave satellite constellation program.
 
-⚠️ ALL FINANCIAL DATA IS SYNTHETIC AND FOR DEMONSTRATION PURPOSES ONLY.
+ALL FINANCIAL DATA IS SYNTHETIC AND FOR DEMONSTRATION PURPOSES ONLY.
 
 Run: streamlit run app.py
 """
@@ -71,7 +71,6 @@ from utils.charts import (
 # ── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="TeraWave CapVal Engine",
-    page_icon="🛰️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -113,7 +112,7 @@ st.markdown('<p class="header-subtitle">Agentic AI System for Capital Allocation
             unsafe_allow_html=True)
 
 st.markdown(
-    '<div class="disclaimer">⚠️ <strong>SYNTHETIC DATA DISCLAIMER:</strong> '
+    '<div class="disclaimer"><strong>SYNTHETIC DATA DISCLAIMER:</strong> '
     'All financial figures in this tool are illustrative and for demonstration purposes only. '
     'They do not represent actual Blue Origin financials, projections, or internal data. '
     'Built as a technical demo of agentic AI applied to capital project valuation.</div>',
@@ -125,7 +124,7 @@ with st.sidebar:
     st.header("Scenario Parameters")
     st.caption("Adjust assumptions to explore scenarios")
 
-    st.subheader("📊 Financial Assumptions")
+    st.subheader("Financial Assumptions")
     capex_mult = st.slider("CapEx Multiplier", 0.7, 1.5, 1.0, 0.05,
                            help="1.0 = base case. >1 = cost overrun, <1 = cost savings")
     rev_mult = st.slider("Revenue Multiplier", 0.5, 1.5, 1.0, 0.05,
@@ -134,22 +133,22 @@ with st.sidebar:
     wacc = st.slider("WACC / Discount Rate (%)", 8, 18, int(config.WACC * 100), 1)
     wacc = wacc / 100.0
 
-    st.subheader("⏱️ Timeline & Deployment")
+    st.subheader("Timeline & Deployment")
     timeline_shift = st.slider("Timeline Shift (years)", -1, 3, 0,
                                help="Positive = delay, negative = acceleration")
     cadence = st.selectbox("Deployment Cadence",
                            ["baseline", "aggressive", "conservative"],
                            help="Aggressive = front-load spend, compress timelines")
 
-    st.subheader("🎲 Monte Carlo")
+    st.subheader("Monte Carlo")
     n_sims = st.select_slider("Simulations", [500, 1000, 2500, 5000, 10000], value=2500)
 
     st.divider()
-    run_mc = st.button("▶ Run Full Analysis", type="primary", use_container_width=True)
+    run_mc = st.button("Run Full Analysis", type="primary", use_container_width=True)
 
     # ── Editable Base Inputs ─────────────────────────────────────────────────
     st.divider()
-    with st.expander("✏️ Edit Base Assumptions", expanded=False):
+    with st.expander("Edit Base Assumptions", expanded=False):
         st.caption("Edit the underlying values directly. Multipliers still apply on top.")
 
         st.markdown("**CapEx by Workstream ($M)**")
@@ -212,12 +211,12 @@ m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
 
 # ── Tabs ─────────────────────────────────────────────────────────────────────
 tab_cashflow, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent = st.tabs([
-    "💰 Cash Flow",
-    "🎲 Monte Carlo",
-    "📈 Variance",
-    "📋 CapEx Workflow",
-    "📄 Doc Intel",
-    "🤖 AI Agents",
+    "Cash Flow",
+    "Monte Carlo",
+    "Variance",
+    "CapEx Workflow",
+    "Doc Intel",
+    "AI Agents",
 ])
 
 # ── Tab 1: Cash Flow ─────────────────────────────────────────────────────────
@@ -230,7 +229,7 @@ with tab_cashflow:
 
     st.plotly_chart(capex_by_workstream_chart(capex_df), use_container_width=True)
 
-    with st.expander("📋 Detailed Projection Table"):
+    with st.expander("Detailed Projection Table"):
         display_df = projection.copy()
         for col in ["capex_m", "opex_m", "revenue_m", "free_cash_flow_m",
                      "cumulative_investment_m", "cumulative_fcf_m", "dcf_m", "cumulative_dcf_m"]:
@@ -288,11 +287,11 @@ with tab_mc:
                                   height=350)
             st.plotly_chart(fig_pay, use_container_width=True)
 
-        with st.expander("📊 Full Simulation Summary"):
+        with st.expander("Full Simulation Summary"):
             st.json(summary)
 
     else:
-        st.info("Click **▶ Run Full Analysis** in the sidebar to execute Monte Carlo simulations.")
+        st.info("Click **Run Full Analysis** in the sidebar to execute Monte Carlo simulations.")
 
 # ── Tab 4: Variance Dashboard ────────────────────────────────────────────────
 with tab_variance:
@@ -338,9 +337,9 @@ with tab_variance:
     if alerts:
         st.subheader(f"Automated Variance Alerts ({len(alerts)})")
         for alert in alerts:
-            icon = "🔴" if alert.severity == "critical" else "🟡"
+            sev_label = "CRITICAL" if alert.severity == "critical" else "WARNING"
             with st.expander(
-                f"{icon} {alert.workstream} — {alert.month}: "
+                f"[{sev_label}] {alert.workstream} — {alert.month}: "
                 f"{alert.variance_pct:+.0f}% (${alert.variance_m:+.1f}M)",
                 expanded=(alert.severity == "critical"),
             ):
@@ -366,7 +365,7 @@ with tab_variance:
 
     # AI variance commentary
     if config.ANTHROPIC_API_KEY:
-        if st.button("🤖 Generate AI Variance Commentary", key="var_ai"):
+        if st.button("Generate AI Variance Commentary", key="var_ai"):
             with st.spinner("Agent generating variance report..."):
                 from agents.orchestrator import _call_agent
                 var_context = f"YTD Variance Summary (through {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][through_month-1]} 2026):\n\n"
@@ -383,7 +382,7 @@ Write a concise executive summary (3-4 paragraphs) covering:
 3. Reallocation recommendations — where can underspend offset overspend?
 4. Forward outlook — will the program land within full-year budget?
 Frame overspends through the 'accelerating progress' lens where justified.
-⚠️ All data is synthetic for demonstration purposes."""
+All data is synthetic for demonstration purposes."""
 
                 ai_commentary = _call_agent(variance_prompt, "Generate the monthly variance report.", var_context)
                 st.markdown("### AI-Generated Variance Commentary")
@@ -400,7 +399,7 @@ with tab_workflow:
 
     st.markdown(
         '<div class="agentic-banner">'
-        '🤖 <strong>How this works:</strong> The agent receives your request and a set of tools '
+        '<strong>How this works:</strong> The agent receives your request and a set of tools '
         '(budget checker, financial analyzer, document search, comparable finder, approval router, '
         'variance checker). It autonomously decides which tools to call, interprets results, and '
         'chains additional calls based on what it discovers. This is <strong>genuine agentic AI</strong> — '
@@ -428,7 +427,7 @@ with tab_workflow:
                 height=100,
             )
             req_requestor = st.text_input("Requestor", value="Demo User")
-            submitted = st.form_submit_button("▶ Run Agentic Analysis", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Run Agentic Analysis", type="primary", use_container_width=True)
 
     with wf_col2:
         st.subheader("Budget Status")
@@ -436,8 +435,8 @@ with tab_workflow:
         for _, row in budget_df.iterrows():
             pool_name = row["Budget Pool"].replace("TeraWave — ", "")
             utilization = float(row["Utilization"].strip("%"))
-            color = "🟢" if utilization < 70 else "🟡" if utilization < 90 else "🔴"
-            st.markdown(f"{color} **{pool_name}** — ${row['Available ($M)']:,.0f}M avail ({row['Utilization']})")
+            status = "OK" if utilization < 70 else "Watch" if utilization < 90 else "At risk"
+            st.markdown(f"**{pool_name}** — ${row['Available ($M)']:,.0f}M avail ({row['Utilization']}) · {status}")
 
         st.divider()
         st.markdown("**Available Agent Tools:**")
@@ -481,7 +480,7 @@ with tab_workflow:
         else:
             # Run the REAL agentic workflow
             steps_container = st.container()
-            agent_status = st.status("🤖 Agent analyzing request...", expanded=True)
+            agent_status = st.status("Agent analyzing request...", expanded=True)
 
             with agent_status:
                 st.markdown(f"**Request:** {req_title} — ${req_amount}M")
@@ -494,7 +493,7 @@ with tab_workflow:
                     """Real-time callback to display each agent step."""
                     if step.step_type == "thinking":
                         # Show agent reasoning
-                        st.markdown(f"**💭 Agent Reasoning**")
+                        st.markdown(f"**Agent Reasoning**")
                         # Only show first 500 chars of intermediate reasoning
                         preview = step.content[:500] + ("..." if len(step.content) > 500 else "")
                         st.markdown(preview)
@@ -502,13 +501,13 @@ with tab_workflow:
 
                     elif step.step_type == "tool_call":
                         st.markdown(
-                            f'**🔧 Tool Call:** <span class="tool-badge">{step.tool_name}</span>',
+                            f'**Tool Call:** <span class="tool-badge">{step.tool_name}</span>',
                             unsafe_allow_html=True,
                         )
                         st.code(step.content, language="json")
 
                     elif step.step_type == "tool_result":
-                        with st.expander(f"📥 Result from {step.tool_name}", expanded=False):
+                        with st.expander(f"Result from {step.tool_name}", expanded=False):
                             try:
                                 parsed = json.loads(step.content)
                                 st.json(parsed)
@@ -531,10 +530,10 @@ with tab_workflow:
 
                 # Update status
                 if agent_result.error:
-                    agent_status.update(label="❌ Agent encountered an error", state="error")
+                    agent_status.update(label="Agent encountered an error", state="error")
                 else:
                     agent_status.update(
-                        label=f"✅ Analysis complete — {agent_result.total_tool_calls} tool calls in {agent_result.total_duration_ms / 1000:.1f}s",
+                        label=f"Analysis complete — {agent_result.total_tool_calls} tool calls in {agent_result.total_duration_ms / 1000:.1f}s",
                         state="complete",
                     )
 
@@ -556,19 +555,19 @@ with tab_workflow:
             st.markdown(agent_result.final_answer)
 
             # Full reasoning chain (collapsed)
-            with st.expander("🔍 Full Agent Reasoning Chain", expanded=False):
+            with st.expander("Full Agent Reasoning Chain", expanded=False):
                 for step in agent_result.steps:
                     if step.step_type == "tool_call":
-                        st.markdown(f'**🔧 {step.title}**')
+                        st.markdown(f'**{step.title}**')
                         st.code(step.content, language="json")
                     elif step.step_type == "tool_result":
-                        st.markdown(f'**📥 {step.title}**')
+                        st.markdown(f'**{step.title}**')
                         try:
                             st.json(json.loads(step.content))
                         except Exception:
                             st.text(step.content[:500])
                     elif step.step_type == "thinking":
-                        st.markdown(f'**💭 {step.title}**')
+                        st.markdown(f'**{step.title}**')
                         st.markdown(step.content[:300] + ("..." if len(step.content) > 300 else ""))
                     st.divider()
         else:
@@ -580,8 +579,7 @@ with tab_workflow:
         st.divider()
 
         rec = result.recommendation
-        rec_colors = {"Approve": "🟢", "Approve with Conditions": "🟡", "Defer": "🟠", "Reject": "🔴"}
-        st.subheader(f"{rec_colors.get(rec, '⚪')} Recommendation: {rec}")
+        st.subheader(f"Recommendation: {rec}")
         st.markdown(f"*{result.recommendation_rationale}*")
 
         if result.conditions:
@@ -598,12 +596,11 @@ with tab_workflow:
 
         st.subheader("Workflow Audit Trail")
         for step in result.workflow_steps:
-            icon = "✅" if step["status"] in ["Passed", "Complete", "Within Budget"] else "⚠️" if "Condition" in step.get("status", "") or "Near" in step.get("status", "") else "❌" if step["status"] == "Failed" else "📋"
-            with st.expander(f"{icon} {step['step']} — {step['status']}"):
+            with st.expander(f"{step['step']} — {step['status']}"):
                 st.markdown(step["details"])
 
     # Historical requests table
-    with st.expander("📋 Historical CapEx Requests"):
+    with st.expander("Historical CapEx Requests"):
         st.dataframe(get_historical_df(), use_container_width=True, hide_index=True)
 
 # ── Tab 7: Document Intelligence ─────────────────────────────────────────────
@@ -621,10 +618,9 @@ with tab_docs:
 
     with doc_col1:
         st.subheader("Document Library")
-        doc_type_icons = {"contract": "📝", "memo": "📋", "report": "📊", "policy": "📜", "proposal": "💼"}
         for doc in all_docs:
-            icon = doc_type_icons.get(doc.doc_type, "📄")
-            with st.expander(f"{icon} {doc.title[:50]}..."):
+            type_label = f"[{doc.doc_type.upper()}]"
+            with st.expander(f"{type_label} {doc.title[:50]}..."):
                 st.markdown(f"**Type:** {doc.doc_type.title()} | **Source:** {doc.source} | **Date:** {doc.date}")
                 if doc.metadata:
                     meta_str = " | ".join(f"{k}: {v}" for k, v in doc.metadata.items())
@@ -663,8 +659,8 @@ with tab_docs:
 
                 # Show retrieved chunks with relevance scores
                 for doc, score in results:
-                    icon = doc_type_icons.get(doc.doc_type, "📄")
-                    with st.expander(f"{icon} {doc.title} — Relevance: {score:.0%}", expanded=(score > 0.2)):
+                    type_label = f"[{doc.doc_type.upper()}]"
+                    with st.expander(f"{type_label} {doc.title} — Relevance: {score:.0%}", expanded=(score > 0.2)):
                         st.markdown(f"**{doc.doc_type.title()}** | {doc.source} | {doc.date}")
                         # Show content preview (first 1000 chars)
                         preview = doc.content[:1500] + ("..." if len(doc.content) > 1500 else "")
@@ -695,7 +691,7 @@ with tab_agent:
 
     st.markdown(
         '<div class="agentic-banner">'
-        '🧠 <strong>Agentic Architecture:</strong> Unlike a chatbot, this agent has <strong>tools</strong> '
+        '<strong>Agentic Architecture:</strong> Unlike a chatbot, this agent has <strong>tools</strong> '
         'it can call autonomously. It plans what data it needs, calls tools (budget checker, document search, '
         'financial analyzer, etc.), interprets results, and chains follow-up calls based on what it discovers. '
         'The reasoning path is <strong>not hardcoded</strong> — it varies per query.</div>',
@@ -715,11 +711,11 @@ with tab_agent:
     # Agent mode toggle
     agent_mode = st.radio(
         "Agent Mode",
-        ["🔧 Agentic (Tool Use)", "💬 Direct (No Tools)"],
+        ["Agentic (Tool Use)", "Direct (No Tools)"],
         horizontal=True,
         help="Agentic mode lets the agent autonomously call tools. Direct mode is a simple chat.",
     )
-    use_agentic = agent_mode.startswith("🔧")
+    use_agentic = agent_mode.startswith("Agentic")
 
     # Chat interface
     if "messages" not in st.session_state:
@@ -732,7 +728,7 @@ with tab_agent:
                 st.markdown(f'<span class="agent-badge">{msg["agent"]}</span>',
                             unsafe_allow_html=True)
             if "tool_calls" in msg and msg["tool_calls"] > 0:
-                st.caption(f"🔧 {msg['tool_calls']} tool calls | ⏱️ {msg.get('duration', 'N/A')}")
+                st.caption(f"{msg['tool_calls']} tool calls | {msg.get('duration', 'N/A')}")
             st.markdown(msg["content"])
 
     # Suggested prompts
@@ -798,18 +794,18 @@ with tab_agent:
                 })
             elif use_agentic:
                 # AGENTIC MODE — agent autonomously uses tools
-                agent_status = st.status("🤖 Agent working...", expanded=True)
+                agent_status = st.status("Agent working...", expanded=True)
 
                 with agent_status:
                     def on_console_step(step):
                         if step.step_type == "tool_call":
                             st.markdown(
-                                f'🔧 Calling <span class="tool-badge">{step.tool_name}</span>',
+                                f'Calling <span class="tool-badge">{step.tool_name}</span>',
                                 unsafe_allow_html=True,
                             )
                             st.code(step.content, language="json")
                         elif step.step_type == "tool_result":
-                            with st.expander(f"📥 {step.tool_name} result", expanded=False):
+                            with st.expander(f"{step.tool_name} result", expanded=False):
                                 try:
                                     st.json(json.loads(step.content))
                                 except Exception:
@@ -818,7 +814,7 @@ with tab_agent:
                     agent_result = run_general_query(user_msg, on_step=on_console_step)
 
                 if agent_result.error:
-                    agent_status.update(label="❌ Error", state="error")
+                    agent_status.update(label="Error", state="error")
                     st.error(agent_result.error)
                     st.session_state.messages.append({
                         "role": "assistant",
@@ -827,11 +823,11 @@ with tab_agent:
                     })
                 else:
                     agent_status.update(
-                        label=f"✅ Done — {agent_result.total_tool_calls} tool calls, {agent_result.total_duration_ms / 1000:.1f}s",
+                        label=f"Done — {agent_result.total_tool_calls} tool calls, {agent_result.total_duration_ms / 1000:.1f}s",
                         state="complete",
                     )
                     st.markdown(f'<span class="agent-badge">Agentic Engine</span>', unsafe_allow_html=True)
-                    st.caption(f"🔧 {agent_result.total_tool_calls} tool calls | ⏱️ {agent_result.total_duration_ms / 1000:.1f}s")
+                    st.caption(f"{agent_result.total_tool_calls} tool calls | {agent_result.total_duration_ms / 1000:.1f}s")
                     st.markdown(agent_result.final_answer)
                     st.session_state.messages.append({
                         "role": "assistant",
@@ -858,7 +854,7 @@ with tab_agent:
 st.divider()
 st.markdown(
     '<div style="text-align:center; color:#666; font-size:0.85em;">'
-    '⚠️ All financial data is synthetic and for demonstration purposes only.<br>'
+    'All financial data is synthetic and for demonstration purposes only.<br>'
     'TeraWave Capital Valuation Engine — Built with Python, Streamlit, Claude (Anthropic)<br>'
     'Agentic AI × Corporate Finance'
     '</div>',

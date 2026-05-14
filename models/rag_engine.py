@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import config
+from models.synthetic_data import get_documents, get_source_metadata
 
 
 # ── Synthetic Document Corpus ────────────────────────────────────────────────
@@ -31,7 +32,38 @@ class Document:
     metadata: dict = field(default_factory=dict)
 
 
-DOCUMENT_CORPUS = [
+def _documents_from_source_file() -> list[Document]:
+    """Load the synthetic document corpus from the file-backed evidence store."""
+    try:
+        source_metadata = get_source_metadata()
+        rows = get_documents()
+    except Exception:
+        return []
+
+    documents = []
+    for row in rows:
+        metadata = {
+            **row.get("metadata", {}),
+            "source_file": source_metadata["source_file"],
+            "dataset_id": source_metadata["dataset_id"],
+            "source_record_id": row["id"],
+            "synthetic": True,
+        }
+        documents.append(
+            Document(
+                id=row["id"],
+                title=row["title"],
+                doc_type=row["doc_type"],
+                source=row["source"],
+                date=row["date"],
+                content=row["content"],
+                metadata=metadata,
+            )
+        )
+    return documents
+
+
+FALLBACK_DOCUMENT_CORPUS = [
     Document(
         id="DOC-001",
         title="TeraWave Ground Segment — Managed Services Agreement (DataLink Corp)",
@@ -405,6 +437,8 @@ DECISION REQUIRED BY: March 15, 2026""",
         metadata={"total_risk_investment_m": 116, "risks_identified": 5},
     ),
 ]
+
+DOCUMENT_CORPUS = _documents_from_source_file() or FALLBACK_DOCUMENT_CORPUS
 
 
 # ── Retrieval Engine (TF-IDF based — no external deps) ──────────────────────

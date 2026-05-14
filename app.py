@@ -54,6 +54,16 @@ from models.variance_engine import (
     get_monthly_trend,
     WORKSTREAMS as VARIANCE_WORKSTREAMS,
 )
+from models.final_project import (
+    SUCCESS_METRICS,
+    EVALUATION_SCENARIOS,
+    REPORT_OUTLINE,
+    DEMO_DAY_SCENARIO,
+    extract_agent_evidence,
+    extract_workflow_evidence,
+    build_agent_memo,
+    build_workflow_memo,
+)
 from utils.charts import (
     cash_flow_waterfall,
     cumulative_investment_chart,
@@ -211,13 +221,14 @@ m4.metric("Total CapEx", f"${metrics['total_capex_m']:,.0f}M")
 m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
 
 # ── Tabs ─────────────────────────────────────────────────────────────────────
-tab_cashflow, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent = st.tabs([
+tab_cashflow, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent, tab_project = st.tabs([
     "Cash Flow",
     "Monte Carlo",
     "Variance",
     "CapEx Workflow",
     "Doc Intel",
     "AI Agents",
+    "Final Project",
 ])
 
 # ── Tab 1: Cash Flow ─────────────────────────────────────────────────────────
@@ -412,18 +423,63 @@ with tab_workflow:
 
     with wf_col1:
         st.subheader("Submit New Request")
+        if st.button("Load Demo Day Scenario", use_container_width=True):
+            st.session_state["demo_request_defaults"] = DEMO_DAY_SCENARIO
+            st.rerun()
+
+        demo_defaults = st.session_state.get("demo_request_defaults", {})
+        pool_options = list(BUDGET_POOLS.keys())
+        priority_options = PRIORITY_TAGS
+        urgency_options = URGENCY_LEVELS
+
         with st.form("capex_form"):
-            req_title = st.text_input("Request Title", placeholder="e.g., Additional Optical Terminal Test Units")
-            req_desc = st.text_area("Description", placeholder="Brief description of what's being requested", height=80)
+            req_title = st.text_input(
+                "Request Title",
+                value=demo_defaults.get("title", ""),
+                placeholder="e.g., Additional Optical Terminal Test Units",
+            )
+            req_desc = st.text_area(
+                "Description",
+                value=demo_defaults.get("description", ""),
+                placeholder="Brief description of what's being requested",
+                height=80,
+            )
             fc1, fc2 = st.columns(2)
-            req_pool = fc1.selectbox("Budget Pool", list(BUDGET_POOLS.keys()))
-            req_amount = fc2.number_input("Amount ($M)", min_value=0.1, max_value=500.0, value=10.0, step=0.5)
+            req_pool = fc1.selectbox(
+                "Budget Pool",
+                pool_options,
+                index=pool_options.index(demo_defaults.get("budget_pool", pool_options[0]))
+                if demo_defaults.get("budget_pool") in pool_options else 0,
+            )
+            req_amount = fc2.number_input(
+                "Amount ($M)",
+                min_value=0.1,
+                max_value=500.0,
+                value=float(demo_defaults.get("amount_m", 10.0)),
+                step=0.5,
+            )
             fc3, fc4, fc5 = st.columns(3)
-            req_priority = fc3.selectbox("Priority", PRIORITY_TAGS)
-            req_urgency = fc4.selectbox("Urgency", URGENCY_LEVELS)
-            req_months = fc5.number_input("Completion (months)", min_value=1, max_value=60, value=12)
+            req_priority = fc3.selectbox(
+                "Priority",
+                priority_options,
+                index=priority_options.index(demo_defaults.get("priority_tag", priority_options[0]))
+                if demo_defaults.get("priority_tag") in priority_options else 0,
+            )
+            req_urgency = fc4.selectbox(
+                "Urgency",
+                urgency_options,
+                index=urgency_options.index(demo_defaults.get("urgency", urgency_options[0]))
+                if demo_defaults.get("urgency") in urgency_options else 0,
+            )
+            req_months = fc5.number_input(
+                "Completion (months)",
+                min_value=1,
+                max_value=60,
+                value=int(demo_defaults.get("completion_months", 12)),
+            )
             req_justification = st.text_area(
                 "Justification — How does this accelerate progress or retire risk?",
+                value=demo_defaults.get("justification", ""),
                 placeholder="Explain why this investment is needed and what progress or risk retirement it enables...",
                 height=100,
             )
@@ -455,6 +511,21 @@ with tab_workflow:
     # Process agentic workflow
     if submitted:
         st.divider()
+        for stale_key in ["agent_result", "wf_result_fallback"]:
+            st.session_state.pop(stale_key, None)
+
+        request_payload = {
+            "title": req_title,
+            "description": req_desc,
+            "amount_m": req_amount,
+            "budget_pool": req_pool,
+            "priority_tag": req_priority,
+            "urgency": req_urgency,
+            "completion_months": req_months,
+            "justification": req_justification,
+            "requestor": req_requestor,
+        }
+        st.session_state["latest_request_payload"] = request_payload
 
         if not config.ANTHROPIC_API_KEY:
             st.warning(
@@ -555,6 +626,24 @@ with tab_workflow:
             st.subheader("Agent Recommendation")
             st.markdown(agent_result.final_answer)
 
+            agent_evidence = extract_agent_evidence(agent_result)
+            agent_memo = build_agent_memo(
+                st.session_state.get("latest_request_payload", {}),
+                agent_evidence,
+            )
+            with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
+                st.markdown("#### Evidence Pack")
+                st.json(agent_evidence)
+                st.markdown("#### 1-2 Page Memo Draft")
+                st.markdown(agent_memo)
+                st.download_button(
+                    "Download memo (.md)",
+                    data=agent_memo,
+                    file_name="terawave_investment_memo.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+
             # Full reasoning chain (collapsed)
             with st.expander("Full Agent Reasoning Chain", expanded=False):
                 for step in agent_result.steps:
@@ -599,6 +688,21 @@ with tab_workflow:
         for step in result.workflow_steps:
             with st.expander(f"{step['step']} — {step['status']}"):
                 st.markdown(step["details"])
+
+        workflow_evidence = extract_workflow_evidence(result)
+        workflow_memo = build_workflow_memo(workflow_evidence)
+        with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
+            st.markdown("#### Evidence Pack")
+            st.json(workflow_evidence)
+            st.markdown("#### 1-2 Page Memo Draft")
+            st.markdown(workflow_memo)
+            st.download_button(
+                "Download memo (.md)",
+                data=workflow_memo,
+                file_name="terawave_investment_memo.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
 
     # Historical requests table
     with st.expander("Historical CapEx Requests"):
@@ -850,6 +954,65 @@ with tab_agent:
                         "content": result["response"],
                         "agent": result["agent"],
                     })
+
+# ── Tab 9: Final Project Pack ────────────────────────────────────────────────
+with tab_project:
+    st.markdown("""
+    ### Final Project: A-Grade Storyline
+
+    **TeraWave CapVal is an agentic CapEx analyst that compresses the finance
+    workflow from request intake to evidence-backed recommendation and board memo.**
+
+    The final submission should emphasize one demoable business workflow instead of
+    a broad feature list: CapEx request -> autonomous tool use -> recommendation ->
+    concise investment memo.
+    """)
+
+    st.subheader("Rubric Alignment")
+    rubric_rows = [
+        {
+            "Rubric area": "Problem Choice & Business Value (30%)",
+            "How TeraWave answers it": "Targets analyst time lost assembling CapEx evidence from ERP, planning, procurement, workflow, and document systems.",
+        },
+        {
+            "Rubric area": "Technical Depth (35%)",
+            "How TeraWave answers it": "Uses a Claude tool loop, structured tools, DCF/NPV/IRR/payback, Monte Carlo, RAG, variance checks, and approval routing.",
+        },
+        {
+            "Rubric area": "Evaluation & Evidence (15%)",
+            "How TeraWave answers it": "Scores scenario tests on tool choice, recommendation correctness, grounding, numerical consistency, and usability.",
+        },
+        {
+            "Rubric area": "Clarity & Communication (20%)",
+            "How TeraWave answers it": "Streams the audit trail for technical transparency and turns the evidence pack into a concise business memo.",
+        },
+    ]
+    st.dataframe(pd.DataFrame(rubric_rows), use_container_width=True, hide_index=True)
+
+    st.subheader("Success Metrics")
+    st.dataframe(pd.DataFrame(SUCCESS_METRICS), use_container_width=True, hide_index=True)
+
+    st.subheader("Evaluation Scenarios")
+    st.dataframe(pd.DataFrame(EVALUATION_SCENARIOS), use_container_width=True, hide_index=True)
+
+    st.subheader("10-Page Report Outline")
+    for idx, (section, description) in enumerate(REPORT_OUTLINE, start=1):
+        st.markdown(f"**{idx}. {section}.** {description}")
+
+    st.subheader("Demo Day Script")
+    st.markdown(f"""
+    Use the **CapEx Workflow** tab and click **Load Demo Day Scenario**.
+
+    - Request: **{DEMO_DAY_SCENARIO['title']}**
+    - Amount: **${DEMO_DAY_SCENARIO['amount_m']}M**
+    - Budget pool: **{DEMO_DAY_SCENARIO['budget_pool']}**
+    - Priority / urgency: **{DEMO_DAY_SCENARIO['priority_tag']} / {DEMO_DAY_SCENARIO['urgency']}**
+
+    Show the live tool trace first, then the recommendation, then the generated
+    evidence pack and memo. Close by explaining that production deployment would
+    require human approval, source-system permissions, privacy controls, and
+    prompt-injection defenses.
+    """)
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.divider()

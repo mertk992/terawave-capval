@@ -145,7 +145,9 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
 
 def _tool_check_budget(input: dict) -> str:
     from models.capex_workflow import BUDGET_POOLS
+    from models.synthetic_data import get_source_metadata
     pool_name = input.get("budget_pool", "")
+    source = get_source_metadata()
 
     # Fuzzy match
     matched = None
@@ -169,13 +171,19 @@ def _tool_check_budget(input: dict) -> str:
         "available_m": available,
         "utilization_pct": round(utilization, 1),
         "status": "healthy" if utilization < 70 else "caution" if utilization < 90 else "critical",
+        "source_file": source["source_file"],
+        "dataset_id": source["dataset_id"],
+        "source_record_id": pool.get("source_record_id"),
+        "synthetic": True,
     })
 
 
 def _tool_search_documents(input: dict) -> str:
     from models.rag_engine import search_documents
+    from models.synthetic_data import get_source_metadata
     query = input.get("query", "")
     results = search_documents(query, top_k=2)
+    source = get_source_metadata()
 
     docs = []
     for doc, score in results:
@@ -189,16 +197,28 @@ def _tool_search_documents(input: dict) -> str:
             "relevance": round(score, 3),
             "excerpt": content,
             "metadata": doc.metadata,
+            "source_file": doc.metadata.get("source_file", source["source_file"]),
+            "source_record_id": doc.metadata.get("source_record_id", doc.id),
+            "synthetic": True,
         })
 
-    return json.dumps({"query": query, "results_found": len(docs), "documents": docs})
+    return json.dumps({
+        "query": query,
+        "results_found": len(docs),
+        "documents": docs,
+        "source_file": source["source_file"],
+        "dataset_id": source["dataset_id"],
+        "synthetic": True,
+    })
 
 
 def _tool_get_comparable_requests(input: dict) -> str:
     from models.capex_workflow import HISTORICAL_REQUESTS
+    from models.synthetic_data import get_source_metadata
     pool = input.get("budget_pool", "")
     priority = input.get("priority_tag", "")
     amount = input.get("amount_m", 0)
+    source = get_source_metadata()
 
     matches = []
     for req in HISTORICAL_REQUESTS:
@@ -210,16 +230,30 @@ def _tool_get_comparable_requests(input: dict) -> str:
         if amount > 0 and abs(req["amount_m"] - amount) / max(amount, 1) < 0.5:
             score += 2
         if score >= 2:
-            matches.append({**req, "relevance_score": score})
+            matches.append({
+                **req,
+                "relevance_score": score,
+                "source_file": source["source_file"],
+                "source_record_id": req["id"],
+                "synthetic": True,
+            })
 
     matches.sort(key=lambda x: x["relevance_score"], reverse=True)
-    return json.dumps({"comparables_found": len(matches[:5]), "requests": matches[:5]})
+    return json.dumps({
+        "comparables_found": len(matches[:5]),
+        "requests": matches[:5],
+        "source_file": source["source_file"],
+        "dataset_id": source["dataset_id"],
+        "synthetic": True,
+    })
 
 
 def _tool_run_financial_impact(input: dict) -> str:
+    from models.synthetic_data import get_source_metadata
     amount = input.get("amount_m", 0)
     priority = input.get("priority_tag", "Standard")
     months = input.get("completion_months", 12)
+    source = get_source_metadata()
 
     priority_multipliers = {
         "Critical Path": 3.5, "Risk Retirement": 4.0, "Cost Reduction": 2.5,
@@ -245,13 +279,19 @@ def _tool_run_financial_impact(input: dict) -> str:
         "progress_score": progress_map.get(priority, 0.5),
         "risk_retirement_score": risk_map.get(priority, 0.3),
         "assessment": "strong" if roi > 100 else "moderate" if roi > 30 else "marginal",
+        "source_file": source["source_file"],
+        "dataset_id": source["dataset_id"],
+        "source_record_id": "SYNTH-FINANCIAL-IMPACT-MODEL",
+        "synthetic": True,
     })
 
 
 def _tool_check_approval_routing(input: dict) -> str:
     from models.capex_workflow import APPROVAL_TIERS
+    from models.synthetic_data import get_source_metadata
     amount = input.get("amount_m", 0)
     urgency = input.get("urgency", "Standard")
+    source = get_source_metadata()
 
     for tier in APPROVAL_TIERS:
         if amount <= tier["max_amount_m"]:
@@ -267,6 +307,10 @@ def _tool_check_approval_routing(input: dict) -> str:
                 "sla_days": sla,
                 "urgency": urgency,
                 "amount_m": amount,
+                "source_file": source["source_file"],
+                "dataset_id": source["dataset_id"],
+                "source_record_id": tier.get("source_record_id"),
+                "synthetic": True,
             })
 
     return json.dumps({"error": "Amount exceeds all tiers"})

@@ -1,0 +1,94 @@
+{
+  "metadata": {
+    "dataset_id": "TW-SYNTH-2026-FINAL",
+    "name": "TeraWave Synthetic Enterprise Evidence Corpus",
+    "created_for": "Final project demo",
+    "disclaimer": "All records are synthetic and for demonstration only. They do not represent actual Blue Origin data."
+  },
+  "approval_tiers": [
+    { "tier": 1, "label": "Program Manager", "max_amount_m": 5, "sla_days": 3, "source_record_id": "POLICY-TIER-001" },
+    { "tier": 2, "label": "VP of Finance", "max_amount_m": 25, "sla_days": 5, "source_record_id": "POLICY-TIER-002" },
+    { "tier": 3, "label": "CFO", "max_amount_m": 100, "sla_days": 7, "source_record_id": "POLICY-TIER-003" },
+    { "tier": 4, "label": "CEO / Board", "max_amount_m": 1000000000, "sla_days": 14, "source_record_id": "POLICY-TIER-004" }
+  ],
+  "budget_pools": [
+    { "id": "ERP-BUD-001", "name": "TeraWave \u2014 Satellite Manufacturing", "budget_m": 4500, "spent_m": 1200, "committed_m": 800, "system": "Synthetic SAP S/4HANA" },
+    { "id": "ERP-BUD-002", "name": "TeraWave \u2014 Ground Segment", "budget_m": 2500, "spent_m": 600, "committed_m": 400, "system": "Synthetic SAP S/4HANA" },
+    { "id": "ERP-BUD-003", "name": "TeraWave \u2014 Launch Services", "budget_m": 2700, "spent_m": 900, "committed_m": 500, "system": "Synthetic SAP S/4HANA" },
+    { "id": "ERP-BUD-004", "name": "TeraWave \u2014 OISL & Comms", "budget_m": 1200, "spent_m": 300, "committed_m": 200, "system": "Synthetic SAP S/4HANA" },
+    { "id": "ERP-BUD-005", "name": "TeraWave \u2014 Software & Network Ops", "budget_m": 800, "spent_m": 200, "committed_m": 100, "system": "Synthetic SAP S/4HANA" },
+    { "id": "ERP-BUD-006", "name": "TeraWave \u2014 R&D & Prototyping", "budget_m": 1500, "spent_m": 700, "committed_m": 300, "system": "Synthetic SAP S/4HANA" },
+    { "id": "ERP-BUD-007", "name": "New Glenn \u2014 Operations", "budget_m": 1200, "spent_m": 500, "committed_m": 200, "system": "Synthetic SAP S/4HANA" },
+    { "id": "ERP-BUD-008", "name": "Blue Moon \u2014 Development", "budget_m": 1000, "spent_m": 400, "committed_m": 150, "system": "Synthetic SAP S/4HANA" }
+  ],
+  "historical_requests": [
+    { "id": "CR-2025-001", "title": "Q/V-Band Test Array Fabrication", "budget_pool": "TeraWave \u2014 Satellite Manufacturing", "amount_m": 12.5, "priority_tag": "Critical Path", "status": "Approved", "outcome": "On track", "npv_impact_m": 45.0, "payback_months": 18, "approval_tier": 2, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2025-002", "title": "Gateway Site Land Acquisition \u2014 Singapore", "budget_pool": "TeraWave \u2014 Ground Segment", "amount_m": 85.0, "priority_tag": "Critical Path", "status": "Approved", "outcome": "Completed", "npv_impact_m": 220.0, "payback_months": 36, "approval_tier": 3, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2025-003", "title": "Optical Terminal Prototype (Gen 2)", "budget_pool": "TeraWave \u2014 OISL & Comms", "amount_m": 8.2, "priority_tag": "Risk Retirement", "status": "Approved", "outcome": "Completed ahead of schedule", "npv_impact_m": 35.0, "payback_months": 12, "approval_tier": 2, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2025-004", "title": "Additional Launch Pad Modifications", "budget_pool": "TeraWave \u2014 Launch Services", "amount_m": 45.0, "priority_tag": "Capacity Expansion", "status": "Approved with Conditions", "outcome": "In progress", "npv_impact_m": 95.0, "payback_months": 24, "approval_tier": 3, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2025-005", "title": "Network Orchestration Software Suite", "budget_pool": "TeraWave \u2014 Software & Network Ops", "amount_m": 15.0, "priority_tag": "Critical Path", "status": "Approved", "outcome": "In progress", "npv_impact_m": 60.0, "payback_months": 15, "approval_tier": 2, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2025-006", "title": "Backup Transponder Inventory", "budget_pool": "TeraWave \u2014 Satellite Manufacturing", "amount_m": 3.2, "priority_tag": "Maintenance", "status": "Approved", "outcome": "Completed", "npv_impact_m": 5.0, "payback_months": 6, "approval_tier": 1, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2025-007", "title": "MEO Satellite Thermal Redesign Study", "budget_pool": "TeraWave \u2014 R&D & Prototyping", "amount_m": 2.8, "priority_tag": "Risk Retirement", "status": "Approved", "outcome": "Completed - retired thermal risk", "npv_impact_m": 120.0, "payback_months": 9, "approval_tier": 1, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2025-008", "title": "Ground Station Fiber Backhaul \u2014 Brazil", "budget_pool": "TeraWave \u2014 Ground Segment", "amount_m": 22.0, "priority_tag": "Capacity Expansion", "status": "Deferred", "outcome": "Resubmitted Q3", "npv_impact_m": 40.0, "payback_months": 30, "approval_tier": 2, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2025-009", "title": "Autonomous Collision Avoidance System", "budget_pool": "TeraWave \u2014 Software & Network Ops", "amount_m": 6.5, "priority_tag": "Risk Retirement", "status": "Approved", "outcome": "In progress", "npv_impact_m": 200.0, "payback_months": 8, "approval_tier": 2, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2025-010", "title": "Spectrum License Extension \u2014 EU", "budget_pool": "TeraWave \u2014 R&D & Prototyping", "amount_m": 35.0, "priority_tag": "Critical Path", "status": "Approved", "outcome": "Completed", "npv_impact_m": 500.0, "payback_months": 48, "approval_tier": 3, "source_system": "Synthetic Coupa" },
+    { "id": "CR-2026-041", "title": "Launch Integration Second Shift", "budget_pool": "TeraWave \u2014 Launch Services", "amount_m": 42.0, "priority_tag": "Critical Path", "status": "Approved with Conditions", "outcome": "Pulled readiness review forward by 7 weeks", "npv_impact_m": 175.0, "payback_months": 19, "approval_tier": 3, "source_system": "Synthetic ServiceNow" },
+    { "id": "CR-2026-052", "title": "Pad Turnaround Automation Fixtures", "budget_pool": "TeraWave \u2014 Launch Services", "amount_m": 18.5, "priority_tag": "Risk Retirement", "status": "Approved", "outcome": "Reduced target pad turnaround by 3 days", "npv_impact_m": 88.0, "payback_months": 14, "approval_tier": 2, "source_system": "Synthetic ServiceNow" }
+  ],
+  "documents": [
+    {
+      "id": "DOC-001",
+      "title": "TeraWave Ground Segment - Managed Services Agreement (DataLink Corp)",
+      "doc_type": "contract",
+      "source": "Synthetic SharePoint / Procurement",
+      "date": "2025-09-15",
+      "metadata": { "vendor": "DataLink Corp", "value_m": 129.5, "term_years": 7 },
+      "content": "MANAGED SERVICES AGREEMENT\n\nBetween: Blue Origin Satellite Systems LLC (Client)\nAnd: DataLink Corp (Provider)\nEffective Date: September 15, 2025\nTerm: 7 years with two 3-year renewal options\n\nSCOPE OF SERVICES:\nProvider shall deliver managed ground station operations for the TeraWave constellation at 12 gateway sites across North America, Europe, and Asia-Pacific. Services include 24/7 Network Operations Center staffing, RF equipment maintenance and calibration, uplink/downlink management with 99.95% availability SLA, site security, and spare parts inventory management.\n\nPRICING:\nBase fee: $18.5M per year for first 12 sites. Additional sites: $1.2M per site per year. Annual escalation: CPI + 1.5%, capped at 5%. Early termination fee: 18 months of base fee if terminated before Year 3.\n\nKEY PERFORMANCE INDICATORS:\nGateway availability must be at least 99.95% per site per month. Mean time to repair must be less than or equal to 4 hours for critical systems. Incident response must be less than or equal to 15 minutes for P1 incidents.\n\nCHANGE MANAGEMENT:\nChanges to service scope require 60 days written notice. Cost impact assessment due within 15 business days of change request. Client may add up to 6 additional sites per year without contract amendment."
+    },
+    {
+      "id": "DOC-002",
+      "title": "TeraWave MEO Satellite Bus - Vendor Selection Memo",
+      "doc_type": "memo",
+      "source": "Synthetic SharePoint / Engineering Procurement",
+      "date": "2025-11-20",
+      "metadata": { "recommended_vendor": "Northstar Space Systems", "contract_value_m": 3100 },
+      "content": "INTERNAL MEMO - CONFIDENTIAL\n\nTo: TeraWave Program Office\nFrom: Satellite Engineering, Procurement\nDate: November 20, 2025\nRe: MEO Satellite Bus Vendor Down-Select\n\nEXECUTIVE SUMMARY:\nAfter a 6-month competitive evaluation, we recommend Northstar Space Systems as the primary vendor for the TeraWave MEO satellite bus.\n\nEVALUATION CRITERIA:\nTechnical capability 30%, manufacturing scalability 25%, cost 20%, schedule risk 15%, heritage/reliability 10%.\n\nNorthstar Space Systems scored 87/100, with the strongest thermal management design for MEO orbit, production capacity of 3 units per month, unit price of $22.8M, NRE of $180M, and 99.2% reliability over 5 years. The main risk is single-facility concentration.\n\nRECOMMENDATION:\nSelect Northstar Space Systems as primary vendor. Production scalability is critical path, thermal management is the top technical risk, and the higher unit price is justified by lower schedule risk. Maintain AstroForge as a qualified alternate vendor with a $15M qualification investment.\n\nBUDGET IMPACT:\nPrimary contract value is $3.1B. Alternate vendor qualification is $15M. Total is $3.115B versus budget of $3.2B."
+    },
+    {
+      "id": "DOC-003",
+      "title": "TeraWave Capital Allocation Policy",
+      "doc_type": "policy",
+      "source": "Synthetic SharePoint / Corporate Finance",
+      "date": "2025-07-01",
+      "metadata": { "version": "2.0", "owner": "VP Corporate Finance" },
+      "content": "TERAWAVE PROGRAM - CAPITAL ALLOCATION POLICY\n\nVersion: 2.0\nEffective: July 1, 2025\nOwner: VP Corporate Finance\n\nPURPOSE:\nThis policy establishes the framework for capital allocation decisions within the TeraWave program. It reflects a commitment to accelerating progress through efficient capital deployment rather than traditional cost minimization.\n\nGUIDING PRINCIPLES:\n1. SPEED OVER SAVINGS - Prioritize options that accelerate program timeline, even if they cost 10-20% more than alternatives.\n2. RISK RETIREMENT - Allocate capital proactively to retire technical and market risks early.\n3. EMPOWERMENT - Program managers are authorized to make capital decisions within their tier when they document the progress-acceleration rationale.\n4. PROGRESS MEASUREMENT - All CapEx requests must quantify expected progress impact using the Program Progress Framework.\n\nAPPROVAL THRESHOLDS:\nUp to $5M: Program Manager approval, 3-day SLA. $5M-$25M: VP Finance approval, 5-day SLA. $25M-$100M: CFO approval, 7-day SLA. Over $100M: CEO/Board approval, 14-day SLA. Emergency requests may follow an expedited process at 50% of the standard SLA.\n\nBUDGET FLEXIBILITY:\nProgram managers may reallocate up to 15% of annual budget between workstreams without VP approval if the reallocation accelerates the critical path. Supplemental funding requests require demonstration of progress-per-dollar above program average.\n\nPROGRESS FRAMEWORK:\nProgress Contribution and Risk Retirement Value are scored from 0 to 1. Combined PPF Score equals 0.5 times Progress plus 0.5 times Risk Retirement. Requests with PPF Score at least 0.6 are fast-tracked."
+    },
+    {
+      "id": "DOC-004",
+      "title": "TeraWave Launch Services - New Glenn Manifest Planning",
+      "doc_type": "report",
+      "source": "Synthetic SharePoint / Mission Planning",
+      "date": "2026-01-15",
+      "metadata": { "total_launches": 104, "total_cost_m": 3249 },
+      "content": "TERAWAVE LAUNCH MANIFEST - PLANNING DOCUMENT\n\nPrepared by: Mission Planning Team\nDate: January 15, 2026\n\nOVERVIEW:\nThis document outlines the planned launch manifest for deploying the TeraWave constellation using New Glenn launch vehicles. The manifest covers the initial deployment phase from 2027 to 2030 and targets operational capability with 1,500+ satellites.\n\nVEHICLE CAPABILITY:\nNew Glenn payload to LEO is 45,000 kg. TeraWave LEO satellite mass with dispenser is approximately 350 kg each. Maximum satellites per launch is approximately 60. Estimated launches required for full LEO constellation are 88. MEO satellites require 16 launches. Total launches are 104.\n\nMANIFEST SUMMARY:\nPhase 1 initial coverage: 6 launches in Q4 2027 to Q1 2028 at one launch per month. Phase 2 regional coverage: 24 launches from Q2 2028 to Q4 2029, ramping to two launches per month. Phase 3 global coverage: 58 LEO launches and 16 MEO launches, with cadence of two to three launches per month.\n\nCOST SUMMARY:\nPhase 1 cost is $192M. Phase 2 cost is $672M. Phase 3 cost is $1.45B for LEO launches plus $640M for MEO launches. Contingency is $295M. Total launch services budget is $3.249B.\n\nKEY RISKS:\nLaunch cadence requires pad turnaround under 20 days. Any launch failure delays manifest by 3-6 months minimum. Satellite production must deliver 120+ satellites per month at peak. Weather and range scheduling can constrain Cape Canaveral operations.\n\nACCELERATION OPTION:\nA second launch integration shift plus pad-readiness automation is expected to pull the initial operational capability readiness review forward by 6-8 weeks if approved by Q2 2026."
+    },
+    {
+      "id": "DOC-005",
+      "title": "TeraWave Enterprise Customer Pipeline - Q4 2025 Review",
+      "doc_type": "report",
+      "source": "Synthetic SharePoint / Business Development",
+      "date": "2025-12-20",
+      "metadata": { "pipeline_value_b": 4.2, "weighted_pipeline_b": 1.8, "anchor_customers": 3 },
+      "content": "TERAWAVE ENTERPRISE PIPELINE REVIEW - Q4 2025\n\nPIPELINE SUMMARY:\nTotal pipeline value is $4.2B in annual recurring revenue across 847 qualified opportunities. Weighted pipeline is $1.8B ARR. Target TAM is enterprise and government secure connectivity, estimated at $28B by 2030.\n\nSEGMENT BREAKDOWN:\nCloud and data center providers are 38% of pipeline. Defense and intelligence are 28%. Financial services are 18%. Energy and resources are 10%. Maritime and aviation are 6%.\n\nANCHOR CUSTOMERS:\nGlobalCloud Inc. signed an LOI for 200 Gbps backbone across 8 intercontinental routes at $52M ARR. US DOD signed a Phase 1 evaluation contract worth $15M initial and $120M ARR at scale. Pinnacle Financial Group signed an LOI for 14 exchange-to-data-center links at $18M ARR.\n\nREVENUE FORECAST:\n2028: $200M ARR. 2029: $800M ARR. 2030: $2.0B ARR. 2032: $5.0B+ ARR."
+    },
+    {
+      "id": "DOC-006",
+      "title": "TeraWave Optical Inter-Satellite Link - Technical Risk Assessment",
+      "doc_type": "report",
+      "source": "Synthetic SharePoint / Systems Engineering",
+      "date": "2026-02-10",
+      "metadata": { "total_risk_investment_m": 116, "risks_identified": 5 },
+      "content": "TECHNICAL RISK ASSESSMENT: OPTICAL INTER-SATELLITE LINKS\n\nDocument: TW-ENG-2026-042\nDate: February 10, 2026\n\nOVERVIEW:\nThe OISL subsystem is the highest-risk, highest-reward technology element in the TeraWave architecture.\n\nRISK REGISTER:\nRISK-001: Pointing and tracking in LEO environment. Probability medium at 40%, impact high. Mitigation is a vibration isolation system funded at $45M. Residual risk after mitigation is low at 15%.\n\nRISK-002: Optical terminal manufacturing yield. Probability medium-high at 55%, impact high. Current yield is 72%; required yield is above 90%. Mitigation is automated alignment station investment of $28M plus 15 optical engineers. Cost to retire is $35M.\n\nRISK-003: LEO-MEO link budget margin. Probability medium at 35%, impact critical. Mitigation is adaptive optics upgrade at $18M and increased transmit power. Cost to retire is $25M.\n\nAGGREGATE RISK SUMMARY:\nTotal risk retirement investment needed is $116M. Expected risk reduction moves confidence in OISL performance from 65% to 90%. Each 1% confidence improvement is valued at approximately $200M in program NPV. Recommendation: fund all risk retirement items."
+    }
+  ]
+}

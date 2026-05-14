@@ -18,26 +18,19 @@ from datetime import datetime, timedelta
 from typing import Optional
 import json
 
+from models.synthetic_data import (
+    get_approval_tiers,
+    get_budget_pools,
+    get_historical_requests,
+    get_source_metadata,
+)
+
 
 # ── Approval Tiers ───────────────────────────────────────────────────────────
 
-APPROVAL_TIERS = [
-    {"tier": 1, "label": "Program Manager",     "max_amount_m": 5,    "sla_days": 3},
-    {"tier": 2, "label": "VP of Finance",        "max_amount_m": 25,   "sla_days": 5},
-    {"tier": 3, "label": "CFO",                  "max_amount_m": 100,  "sla_days": 7},
-    {"tier": 4, "label": "CEO / Board",          "max_amount_m": 1e9,  "sla_days": 14},
-]
+APPROVAL_TIERS = get_approval_tiers()
 
-BUDGET_POOLS = {
-    "TeraWave — Satellite Manufacturing": {"budget_m": 4_500, "spent_m": 1_200, "committed_m": 800},
-    "TeraWave — Ground Segment":          {"budget_m": 2_500, "spent_m": 600,   "committed_m": 400},
-    "TeraWave — Launch Services":         {"budget_m": 2_700, "spent_m": 900,   "committed_m": 500},
-    "TeraWave — OISL & Comms":            {"budget_m": 1_200, "spent_m": 300,   "committed_m": 200},
-    "TeraWave — Software & Network Ops":  {"budget_m": 800,   "spent_m": 200,   "committed_m": 100},
-    "TeraWave — R&D & Prototyping":       {"budget_m": 1_500, "spent_m": 700,   "committed_m": 300},
-    "New Glenn — Operations":             {"budget_m": 1_200, "spent_m": 500,   "committed_m": 200},
-    "Blue Moon — Development":            {"budget_m": 1_000, "spent_m": 400,   "committed_m": 150},
-}
+BUDGET_POOLS = get_budget_pools()
 
 PRIORITY_TAGS = ["Critical Path", "Risk Retirement", "Cost Reduction", "Capacity Expansion", "R&D / Innovation", "Maintenance"]
 
@@ -99,68 +92,7 @@ class WorkflowResult:
 
 # ── Synthetic Historical Requests ────────────────────────────────────────────
 
-HISTORICAL_REQUESTS = [
-    {
-        "id": "CR-2025-001", "title": "Q/V-Band Test Array Fabrication",
-        "budget_pool": "TeraWave — Satellite Manufacturing", "amount_m": 12.5,
-        "priority_tag": "Critical Path", "status": "Approved", "outcome": "On track",
-        "npv_impact_m": 45.0, "payback_months": 18, "approval_tier": 2,
-    },
-    {
-        "id": "CR-2025-002", "title": "Gateway Site Land Acquisition — Singapore",
-        "budget_pool": "TeraWave — Ground Segment", "amount_m": 85.0,
-        "priority_tag": "Critical Path", "status": "Approved", "outcome": "Completed",
-        "npv_impact_m": 220.0, "payback_months": 36, "approval_tier": 3,
-    },
-    {
-        "id": "CR-2025-003", "title": "Optical Terminal Prototype (Gen 2)",
-        "budget_pool": "TeraWave — OISL & Comms", "amount_m": 8.2,
-        "priority_tag": "Risk Retirement", "status": "Approved", "outcome": "Completed ahead of schedule",
-        "npv_impact_m": 35.0, "payback_months": 12, "approval_tier": 2,
-    },
-    {
-        "id": "CR-2025-004", "title": "Additional Launch Pad Modifications",
-        "budget_pool": "TeraWave — Launch Services", "amount_m": 45.0,
-        "priority_tag": "Capacity Expansion", "status": "Approved with Conditions", "outcome": "In progress",
-        "npv_impact_m": 95.0, "payback_months": 24, "approval_tier": 3,
-    },
-    {
-        "id": "CR-2025-005", "title": "Network Orchestration Software Suite",
-        "budget_pool": "TeraWave — Software & Network Ops", "amount_m": 15.0,
-        "priority_tag": "Critical Path", "status": "Approved", "outcome": "In progress",
-        "npv_impact_m": 60.0, "payback_months": 15, "approval_tier": 2,
-    },
-    {
-        "id": "CR-2025-006", "title": "Backup Transponder Inventory",
-        "budget_pool": "TeraWave — Satellite Manufacturing", "amount_m": 3.2,
-        "priority_tag": "Maintenance", "status": "Approved", "outcome": "Completed",
-        "npv_impact_m": 5.0, "payback_months": 6, "approval_tier": 1,
-    },
-    {
-        "id": "CR-2025-007", "title": "MEO Satellite Thermal Redesign Study",
-        "budget_pool": "TeraWave — R&D & Prototyping", "amount_m": 2.8,
-        "priority_tag": "Risk Retirement", "status": "Approved", "outcome": "Completed — retired thermal risk",
-        "npv_impact_m": 120.0, "payback_months": 9, "approval_tier": 1,
-    },
-    {
-        "id": "CR-2025-008", "title": "Ground Station Fiber Backhaul — Brazil",
-        "budget_pool": "TeraWave — Ground Segment", "amount_m": 22.0,
-        "priority_tag": "Capacity Expansion", "status": "Deferred", "outcome": "Resubmitted Q3",
-        "npv_impact_m": 40.0, "payback_months": 30, "approval_tier": 2,
-    },
-    {
-        "id": "CR-2025-009", "title": "Autonomous Collision Avoidance System",
-        "budget_pool": "TeraWave — Software & Network Ops", "amount_m": 6.5,
-        "priority_tag": "Risk Retirement", "status": "Approved", "outcome": "In progress",
-        "npv_impact_m": 200.0, "payback_months": 8, "approval_tier": 2,
-    },
-    {
-        "id": "CR-2025-010", "title": "Spectrum License Extension — EU",
-        "budget_pool": "TeraWave — R&D & Prototyping", "amount_m": 35.0,
-        "priority_tag": "Critical Path", "status": "Approved", "outcome": "Completed",
-        "npv_impact_m": 500.0, "payback_months": 48, "approval_tier": 3,
-    },
-]
+HISTORICAL_REQUESTS = get_historical_requests()
 
 
 # ── Workflow Engine ──────────────────────────────────────────────────────────
@@ -401,6 +333,7 @@ def get_historical_df() -> pd.DataFrame:
 def get_budget_summary() -> pd.DataFrame:
     """Return budget pool summary."""
     records = []
+    source = get_source_metadata()
     for pool, data in BUDGET_POOLS.items():
         available = data["budget_m"] - data["spent_m"] - data["committed_m"]
         records.append({
@@ -410,5 +343,7 @@ def get_budget_summary() -> pd.DataFrame:
             "Committed ($M)": data["committed_m"],
             "Available ($M)": available,
             "Utilization": f"{((data['spent_m'] + data['committed_m']) / data['budget_m'] * 100):.0f}%",
+            "Source Record": data.get("source_record_id"),
+            "Dataset": source["dataset_id"],
         })
     return pd.DataFrame(records)

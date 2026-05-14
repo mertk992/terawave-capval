@@ -1,22 +1,52 @@
-# TeraWave Capital Valuation Engine
+# TeraWave CapVal: Agentic CapEx Memo Engine
 
-An agentic AI system for capital allocation analysis, built around Blue Origin's TeraWave satellite constellation program.
+An agentic CapEx decision-support system that turns a capital request into an
+evidence-backed recommendation and concise investment memo.
 
 > **⚠️ All financial data is synthetic and for demonstration purposes only.** This tool does not represent actual Blue Origin financials, projections, or internal data.
 
+## Final Project Thesis
+
+TeraWave CapVal compresses the finance workflow from request intake to
+board-ready recommendation. A finance analyst submits a CapEx request; the
+agent autonomously gathers evidence from synthetic enterprise-style systems,
+runs financial and risk analysis, and produces a GO / CONDITIONAL / DEFER /
+NO-GO recommendation with an audit trail and a 1-2 page memo.
+
+The project is intentionally scoped around one high-value business workflow:
+
+```
+CapEx request -> tool-using agent -> evidence pack -> recommendation -> memo
+```
+
+This keeps the final report and Demo Day presentation concise while still
+showing technical depth.
+
 ## What It Does
 
-This is a multi-agent capital project valuation engine that goes beyond traditional DCF analysis by incorporating a **"progress per dollar" and "risk retired per dollar"** framework — designed for capital-intensive programs where the goal is to **accelerate deployment**, not suppress costs.
+This is an agentic capital project valuation engine that goes beyond traditional
+DCF analysis by incorporating a **"progress per dollar" and "risk retired per
+dollar"** framework. It is designed for capital-intensive programs where the
+goal is to **accelerate deployment**, not simply suppress costs.
 
 ### Core Components
 
 1. **Financial Model** — 12-year DCF projection with CapEx by workstream, OpEx ramp, revenue schedule, IRR, NPV, and payback analysis
 2. **Capital Efficiency Framework** — Maps each workstream by progress contribution and risk retirement value per dollar deployed
 3. **Monte Carlo Simulation** — 2,500+ correlated simulations producing probabilistic NPV/IRR/payback distributions with sensitivity analysis
-4. **AI Agent Console** — Three specialized Claude agents:
-   - **Capital Allocation Analyst** — Recommends optimal capital deployment across workstreams
-   - **Risk & Scenario Agent** — Interprets simulation results and recommends risk-retirement investments
-   - **Investment Memo Writer** — Generates board-ready investment memos
+4. **Agentic CapEx Workflow** — Claude chooses and chains tools for budget, RAG, comparables, financial impact, approval routing, and variance evidence
+5. **Evidence Pack + Memo** — The app converts tool outputs into a concise investment memo that can be downloaded after the workflow
+6. **Final Project Pack** — A rubric-aligned tab with evaluation scenarios, success metrics, report outline, and demo script
+
+### Synthetic Evidence Corpus
+
+The demo now uses an explicit synthetic source file at
+`data/synthetic_enterprise_data.json`. Budget checks, approval routing,
+historical request comparables, and RAG document search all load from that file
+and return source metadata (`source_file`, `dataset_id`, `source_record_id`) in
+tool outputs. This makes the prototype "real" in the important demo sense: the
+agent grounds its answer in traceable source material, while the source material
+is clearly labeled as synthetic.
 
 ### Architecture
 
@@ -41,6 +71,21 @@ This is a multi-agent capital project valuation engine that goes beyond traditio
 │         (Claude API)                         │
 └─────────────────────────────────────────────┘
 ```
+
+## Evaluation Plan
+
+The final report should evaluate the prototype with 4-6 realistic request
+scenarios. Score each run on:
+
+- Tool-selection accuracy
+- Recommendation correctness
+- Evidence grounding and source citations
+- Numerical consistency across tool outputs and memo
+- Business usability for a non-technical finance audience
+- Estimated cycle-time compression from manual memo assembly
+
+See `FINAL_REPORT_OUTLINE.md` and `DEMO_DAY_SCRIPT.md` for the concise final
+submission structure.
 
 ## Quick Start
 

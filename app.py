@@ -55,16 +55,12 @@ from models.variance_engine import (
     WORKSTREAMS as VARIANCE_WORKSTREAMS,
 )
 from models.final_project import (
-    SUCCESS_METRICS,
-    EVALUATION_SCENARIOS,
-    REPORT_OUTLINE,
     DEMO_DAY_SCENARIO,
     extract_agent_evidence,
     extract_workflow_evidence,
     build_agent_memo,
     build_workflow_memo,
 )
-from models.synthetic_data import get_source_metadata
 from utils.charts import (
     cash_flow_waterfall,
     cumulative_investment_chart,
@@ -95,14 +91,6 @@ st.markdown("""
         background-color: #2C1810; border: 1px solid #FF6B35; border-radius: 8px;
         padding: 12px 16px; margin-bottom: 16px; font-size: 0.85em; color: #FFB088;
     }
-    .synthetic-pill {
-        display: inline-block; background: #FF6B35; color: #111; padding: 3px 10px;
-        border-radius: 999px; font-size: 0.78em; font-weight: 700; margin-right: 8px;
-    }
-    .synthetic-callout {
-        background-color: #2C1810; border: 1px solid #FF6B35; border-radius: 8px;
-        padding: 10px 14px; margin: 8px 0 16px 0; color: #FFB088; font-size: 0.9em;
-    }
     .agent-badge {
         display: inline-block; background: #0066CC; color: white; padding: 2px 10px;
         border-radius: 12px; font-size: 0.8em; font-weight: 600; margin-bottom: 8px;
@@ -131,15 +119,22 @@ st.title("TeraWave Capital Valuation Engine")
 st.markdown('<p class="header-subtitle">Agentic AI System for Capital Allocation Analysis &nbsp;|&nbsp; Blue Origin</p>',
             unsafe_allow_html=True)
 
-source_meta = get_source_metadata()
-
 st.markdown(
-    '<div class="disclaimer"><span class="synthetic-pill">SYNTHETIC DATA DEMO</span>'
-    '<strong>No real Blue Origin financials, projections, contracts, approvals, or internal records are used.</strong><br>'
-    'All budgets, historical CapEx requests, RAG documents, variance figures, and valuation assumptions are fabricated '
-    f'for demonstration and loaded from the synthetic evidence corpus <code>{source_meta["dataset_id"]}</code>.</div>',
+    '<div class="disclaimer"><strong>DEMO DISCLAIMER:</strong> '
+    'This prototype uses illustrative demo data and does not represent actual Blue Origin financials, '
+    'projections, contracts, approvals, or internal records.</div>',
     unsafe_allow_html=True,
 )
+
+
+def public_evidence_view(value):
+    """Hide internal data-source metadata in user-facing JSON views."""
+    hidden_keys = {"synthetic", "source_file", "dataset_id", "data_status"}
+    if isinstance(value, dict):
+        return {k: public_evidence_view(v) for k, v in value.items() if k not in hidden_keys}
+    if isinstance(value, list):
+        return [public_evidence_view(item) for item in value]
+    return value
 
 # ── Sidebar: Scenario Controls ───────────────────────────────────────────────
 with st.sidebar:
@@ -232,14 +227,13 @@ m4.metric("Total CapEx", f"${metrics['total_capex_m']:,.0f}M")
 m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
 
 # ── Tabs ─────────────────────────────────────────────────────────────────────
-tab_cashflow, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent, tab_project = st.tabs([
+tab_cashflow, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent = st.tabs([
     "Cash Flow",
     "Monte Carlo",
     "Variance",
     "CapEx Workflow",
     "Doc Intel",
     "AI Agents",
-    "Final Project",
 ])
 
 # ── Tab 1: Cash Flow ─────────────────────────────────────────────────────────
@@ -404,8 +398,7 @@ Write a concise executive summary (3-4 paragraphs) covering:
 2. Top 2-3 workstreams requiring attention (with specific numbers)
 3. Reallocation recommendations — where can underspend offset overspend?
 4. Forward outlook — will the program land within full-year budget?
-Frame overspends through the 'accelerating progress' lens where justified.
-All data is synthetic for demonstration purposes."""
+Frame overspends through the 'accelerating progress' lens where justified."""
 
                 ai_commentary = _call_agent(variance_prompt, "Generate the monthly variance report.", var_context)
                 st.markdown("### AI-Generated Variance Commentary")
@@ -427,14 +420,6 @@ with tab_workflow:
         'variance checker). It autonomously decides which tools to call, interprets results, and '
         'chains additional calls based on what it discovers. This is <strong>genuine agentic AI</strong> — '
         'the reasoning path is not hardcoded.</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        '<div class="synthetic-callout"><span class="synthetic-pill">SYNTHETIC SOURCES</span>'
-        'Every tool result in this workflow is grounded in fabricated demo records, not live enterprise systems. '
-        f'The budget, approval, comparable-request, and document evidence comes from <code>{source_meta["dataset_id"]}</code> '
-        'and includes source metadata in the evidence pack.</div>',
         unsafe_allow_html=True,
     )
 
@@ -507,7 +492,6 @@ with tab_workflow:
 
     with wf_col2:
         st.subheader("Budget Status")
-        st.caption(f"Synthetic ERP budget records from {source_meta['dataset_id']}.")
         budget_df = get_budget_summary()
         for _, row in budget_df.iterrows():
             pool_name = row["Budget Pool"].replace("TeraWave — ", "")
@@ -602,7 +586,7 @@ with tab_workflow:
                         with st.expander(f"Result from {step.tool_name}", expanded=False):
                             try:
                                 parsed = json.loads(step.content)
-                                st.json(parsed)
+                                st.json(public_evidence_view(parsed))
                             except Exception:
                                 st.text(step.content)
                         st.divider()
@@ -652,9 +636,8 @@ with tab_workflow:
                 agent_evidence,
             )
             with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
-                st.warning("Synthetic evidence only: this pack cites fabricated records from the demo corpus, not real enterprise data.")
                 st.markdown("#### Evidence Pack")
-                st.json(agent_evidence)
+                st.json(public_evidence_view(agent_evidence))
                 st.markdown("#### 1-2 Page Memo Draft")
                 st.markdown(agent_memo)
                 st.download_button(
@@ -674,7 +657,7 @@ with tab_workflow:
                     elif step.step_type == "tool_result":
                         st.markdown(f'**{step.title}**')
                         try:
-                            st.json(json.loads(step.content))
+                            st.json(public_evidence_view(json.loads(step.content)))
                         except Exception:
                             st.text(step.content[:500])
                     elif step.step_type == "thinking":
@@ -713,9 +696,8 @@ with tab_workflow:
         workflow_evidence = extract_workflow_evidence(result)
         workflow_memo = build_workflow_memo(workflow_evidence)
         with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
-            st.warning("Synthetic evidence only: this pack cites fabricated records from the demo corpus, not real enterprise data.")
             st.markdown("#### Evidence Pack")
-            st.json(workflow_evidence)
+            st.json(public_evidence_view(workflow_evidence))
             st.markdown("#### 1-2 Page Memo Draft")
             st.markdown(workflow_memo)
             st.download_button(
@@ -728,24 +710,18 @@ with tab_workflow:
 
     # Historical requests table
     with st.expander("Historical CapEx Requests"):
-        st.dataframe(get_historical_df(), use_container_width=True, hide_index=True)
+        historical_df = get_historical_df()
+        hidden_cols = [col for col in ["source_system", "source_file", "dataset_id", "synthetic"] if col in historical_df.columns]
+        st.dataframe(historical_df.drop(columns=hidden_cols), use_container_width=True, hide_index=True)
 
 # ── Tab 7: Document Intelligence ─────────────────────────────────────────────
 with tab_docs:
     st.markdown("""
     ### Document Intelligence (RAG)
     Search and query across TeraWave program documents — contracts, vendor memos,
-    policy docs, technical reports, and pipeline reviews. These are **synthetic
-    source documents** fabricated for the demo, and AI answers are grounded in
-    those synthetic documents with citations.
+    policy docs, technical reports, and pipeline reviews. AI answers are grounded
+    in source documents with citations.
     """)
-
-    st.markdown(
-        '<div class="synthetic-callout"><span class="synthetic-pill">SYNTHETIC RAG CORPUS</span>'
-        f'The document library below is loaded from <code>{source_meta["dataset_id"]}</code>. '
-        'It is designed to behave like a SharePoint evidence store, but every document is fictional.</div>',
-        unsafe_allow_html=True,
-    )
 
     # Document library
     all_docs = get_all_documents()
@@ -754,12 +730,13 @@ with tab_docs:
     with doc_col1:
         st.subheader("Document Library")
         for doc in all_docs:
-            type_label = f"[SYNTHETIC {doc.doc_type.upper()}]"
+            type_label = f"[{doc.doc_type.upper()}]"
             with st.expander(f"{type_label} {doc.title[:50]}..."):
-                st.markdown(f"**Type:** {doc.doc_type.title()} | **Source:** {doc.source} | **Date:** {doc.date}")
-                st.caption("Synthetic demo document. Not an actual Blue Origin record.")
+                source_label = doc.source.replace("Synthetic ", "")
+                st.markdown(f"**Type:** {doc.doc_type.title()} | **Source:** {source_label} | **Date:** {doc.date}")
                 if doc.metadata:
-                    meta_str = " | ".join(f"{k}: {v}" for k, v in doc.metadata.items())
+                    metadata = public_evidence_view(doc.metadata)
+                    meta_str = " | ".join(f"{k}: {v}" for k, v in metadata.items())
                     st.markdown(f"**Metadata:** {meta_str}")
                 st.markdown(f"*{len(doc.content)} characters*")
 
@@ -783,8 +760,8 @@ with tab_docs:
                     st.session_state["doc_query"] = sug
                     st.rerun()
 
-        query = st.text_input("Search synthetic documents...", value=st.session_state.get("doc_query", ""),
-                              placeholder="Ask anything about the synthetic TeraWave document corpus...")
+        query = st.text_input("Search documents...", value=st.session_state.get("doc_query", ""),
+                              placeholder="Ask anything about TeraWave program documents...")
 
         if query:
             # Retrieve relevant documents
@@ -795,10 +772,10 @@ with tab_docs:
 
                 # Show retrieved chunks with relevance scores
                 for doc, score in results:
-                    type_label = f"[SYNTHETIC {doc.doc_type.upper()}]"
+                    type_label = f"[{doc.doc_type.upper()}]"
                     with st.expander(f"{type_label} {doc.title} — Relevance: {score:.0%}", expanded=(score > 0.2)):
-                        st.markdown(f"**{doc.doc_type.title()}** | {doc.source} | {doc.date}")
-                        st.caption("Synthetic demo document. Not an actual Blue Origin record.")
+                        source_label = doc.source.replace("Synthetic ", "")
+                        st.markdown(f"**{doc.doc_type.title()}** | {source_label} | {doc.date}")
                         # Show content preview (first 1000 chars)
                         preview = doc.content[:1500] + ("..." if len(doc.content) > 1500 else "")
                         st.text(preview)
@@ -944,7 +921,7 @@ with tab_agent:
                         elif step.step_type == "tool_result":
                             with st.expander(f"{step.tool_name} result", expanded=False):
                                 try:
-                                    st.json(json.loads(step.content))
+                                    st.json(public_evidence_view(json.loads(step.content)))
                                 except Exception:
                                     st.text(step.content[:300])
 
@@ -987,78 +964,11 @@ with tab_agent:
                         "agent": result["agent"],
                     })
 
-# ── Tab 9: Final Project Pack ────────────────────────────────────────────────
-with tab_project:
-    st.markdown("""
-    ### Final Project: A-Grade Storyline
-
-    **TeraWave CapVal is an agentic CapEx analyst that compresses the finance
-    workflow from request intake to evidence-backed recommendation and board memo.**
-
-    The final submission should emphasize one demoable business workflow instead of
-    a broad feature list: CapEx request -> autonomous tool use -> recommendation ->
-    concise investment memo.
-    """)
-
-    st.markdown(
-        '<div class="synthetic-callout"><span class="synthetic-pill">IMPORTANT: SYNTHETIC DATA</span>'
-        'For the final report and demo, describe this as a working prototype grounded in a fabricated evidence corpus. '
-        'The system demonstrates architecture, workflow, and evaluation logic; it does not use real Blue Origin data.</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.subheader("Rubric Alignment")
-    rubric_rows = [
-        {
-            "Rubric area": "Problem Choice & Business Value (30%)",
-            "How TeraWave answers it": "Targets analyst time lost assembling CapEx evidence from ERP, planning, procurement, workflow, and document systems using synthetic source records.",
-        },
-        {
-            "Rubric area": "Technical Depth (35%)",
-            "How TeraWave answers it": "Uses a Claude tool loop, structured tools, DCF/NPV/IRR/payback, Monte Carlo, RAG, variance checks, and approval routing.",
-        },
-        {
-            "Rubric area": "Evaluation & Evidence (15%)",
-            "How TeraWave answers it": "Scores scenario tests on tool choice, recommendation correctness, grounding, numerical consistency, and usability.",
-        },
-        {
-            "Rubric area": "Clarity & Communication (20%)",
-            "How TeraWave answers it": "Streams the audit trail for technical transparency and turns the evidence pack into a concise business memo.",
-        },
-    ]
-    st.dataframe(pd.DataFrame(rubric_rows), use_container_width=True, hide_index=True)
-
-    st.subheader("Success Metrics")
-    st.dataframe(pd.DataFrame(SUCCESS_METRICS), use_container_width=True, hide_index=True)
-
-    st.subheader("Evaluation Scenarios")
-    st.dataframe(pd.DataFrame(EVALUATION_SCENARIOS), use_container_width=True, hide_index=True)
-
-    st.subheader("10-Page Report Outline")
-    for idx, (section, description) in enumerate(REPORT_OUTLINE, start=1):
-        st.markdown(f"**{idx}. {section}.** {description}")
-
-    st.subheader("Demo Day Script")
-    st.markdown(f"""
-    Use the **CapEx Workflow** tab and click **Load Demo Day Scenario**.
-
-    - Request: **{DEMO_DAY_SCENARIO['title']}**
-    - Amount: **${DEMO_DAY_SCENARIO['amount_m']}M**
-    - Budget pool: **{DEMO_DAY_SCENARIO['budget_pool']}**
-    - Priority / urgency: **{DEMO_DAY_SCENARIO['priority_tag']} / {DEMO_DAY_SCENARIO['urgency']}**
-
-    Show the live tool trace first, then the recommendation, then the generated
-    evidence pack and memo. Explicitly point out that the evidence pack is
-    synthetic and traceable to `{source_meta['dataset_id']}`. Close by explaining
-    that production deployment would require human approval, source-system
-    permissions, privacy controls, and prompt-injection defenses.
-    """)
-
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.divider()
 st.markdown(
     '<div style="text-align:center; color:#666; font-size:0.85em;">'
-    'All financial data is synthetic and for demonstration purposes only.<br>'
+    'Illustrative demo data only.<br>'
     'TeraWave Capital Valuation Engine — Built with Python, Streamlit, Claude (Anthropic)<br>'
     'Agentic AI × Corporate Finance'
     '</div>',

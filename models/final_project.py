@@ -13,6 +13,8 @@ import json
 from datetime import date
 from typing import Any
 
+from models.synthetic_data import get_source_metadata
+
 
 SUCCESS_METRICS = [
     {
@@ -115,6 +117,7 @@ DEMO_DAY_SCENARIO = {
 
 def extract_agent_evidence(agent_result: Any) -> dict[str, Any]:
     """Convert an AgentResult tool trace into a compact evidence pack."""
+    source = get_source_metadata()
     tool_results: dict[str, list[dict[str, Any]]] = {}
     tool_calls = []
 
@@ -134,6 +137,9 @@ def extract_agent_evidence(agent_result: Any) -> dict[str, Any]:
 
     return {
         "source": "agentic_tool_trace",
+        "data_status": "synthetic_demo_data_only",
+        "source_file": source["source_file"],
+        "dataset_id": source["dataset_id"],
         "tool_calls": tool_calls,
         "tool_results": tool_results,
         "final_answer": getattr(agent_result, "final_answer", ""),
@@ -144,9 +150,13 @@ def extract_agent_evidence(agent_result: Any) -> dict[str, Any]:
 
 def extract_workflow_evidence(workflow_result: Any) -> dict[str, Any]:
     """Convert the deterministic fallback workflow result into the same evidence shape."""
+    source = get_source_metadata()
     req = workflow_result.request
     return {
         "source": "rule_based_workflow",
+        "data_status": "synthetic_demo_data_only",
+        "source_file": source["source_file"],
+        "dataset_id": source["dataset_id"],
         "request": {
             "title": req.title,
             "amount_m": req.amount_m,
@@ -252,7 +262,8 @@ def _render_memo(
         "",
         f"**Date:** {date.today().isoformat()}",
         "**Prepared by:** TeraWave CapVal Agent",
-        "**Data status:** Synthetic demonstration data only",
+        "**Data status:** SYNTHETIC DEMONSTRATION DATA ONLY - no real Blue Origin records, financials, contracts, or approvals are used.",
+        f"**Synthetic corpus:** {get_source_metadata()['dataset_id']}",
         "",
         "## Executive Recommendation",
         "",
@@ -270,6 +281,7 @@ def _render_memo(
         "",
         "## Evidence Pack",
         "",
+        "- **Evidence status:** All cited budgets, policies, documents, comparables, and workflow records are fabricated for this demo.",
         _financial_line(financial),
         _budget_line(budget),
         _routing_line(routing),

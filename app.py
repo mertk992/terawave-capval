@@ -64,6 +64,7 @@ from models.final_project import (
     build_agent_memo,
     build_workflow_memo,
 )
+from models.synthetic_data import get_source_metadata
 from utils.charts import (
     cash_flow_waterfall,
     cumulative_investment_chart,
@@ -94,6 +95,14 @@ st.markdown("""
         background-color: #2C1810; border: 1px solid #FF6B35; border-radius: 8px;
         padding: 12px 16px; margin-bottom: 16px; font-size: 0.85em; color: #FFB088;
     }
+    .synthetic-pill {
+        display: inline-block; background: #FF6B35; color: #111; padding: 3px 10px;
+        border-radius: 999px; font-size: 0.78em; font-weight: 700; margin-right: 8px;
+    }
+    .synthetic-callout {
+        background-color: #2C1810; border: 1px solid #FF6B35; border-radius: 8px;
+        padding: 10px 14px; margin: 8px 0 16px 0; color: #FFB088; font-size: 0.9em;
+    }
     .agent-badge {
         display: inline-block; background: #0066CC; color: white; padding: 2px 10px;
         border-radius: 12px; font-size: 0.8em; font-weight: 600; margin-bottom: 8px;
@@ -122,11 +131,13 @@ st.title("TeraWave Capital Valuation Engine")
 st.markdown('<p class="header-subtitle">Agentic AI System for Capital Allocation Analysis &nbsp;|&nbsp; Blue Origin</p>',
             unsafe_allow_html=True)
 
+source_meta = get_source_metadata()
+
 st.markdown(
-    '<div class="disclaimer"><strong>SYNTHETIC DATA DISCLAIMER:</strong> '
-    'All financial figures in this tool are illustrative and for demonstration purposes only. '
-    'They do not represent actual Blue Origin financials, projections, or internal data. '
-    'Built as a technical demo of agentic AI applied to capital project valuation.</div>',
+    '<div class="disclaimer"><span class="synthetic-pill">SYNTHETIC DATA DEMO</span>'
+    '<strong>No real Blue Origin financials, projections, contracts, approvals, or internal records are used.</strong><br>'
+    'All budgets, historical CapEx requests, RAG documents, variance figures, and valuation assumptions are fabricated '
+    f'for demonstration and loaded from the synthetic evidence corpus <code>{source_meta["dataset_id"]}</code>.</div>',
     unsafe_allow_html=True,
 )
 
@@ -419,6 +430,14 @@ with tab_workflow:
         unsafe_allow_html=True,
     )
 
+    st.markdown(
+        '<div class="synthetic-callout"><span class="synthetic-pill">SYNTHETIC SOURCES</span>'
+        'Every tool result in this workflow is grounded in fabricated demo records, not live enterprise systems. '
+        f'The budget, approval, comparable-request, and document evidence comes from <code>{source_meta["dataset_id"]}</code> '
+        'and includes source metadata in the evidence pack.</div>',
+        unsafe_allow_html=True,
+    )
+
     wf_col1, wf_col2 = st.columns([2, 1])
 
     with wf_col1:
@@ -488,6 +507,7 @@ with tab_workflow:
 
     with wf_col2:
         st.subheader("Budget Status")
+        st.caption(f"Synthetic ERP budget records from {source_meta['dataset_id']}.")
         budget_df = get_budget_summary()
         for _, row in budget_df.iterrows():
             pool_name = row["Budget Pool"].replace("TeraWave — ", "")
@@ -632,6 +652,7 @@ with tab_workflow:
                 agent_evidence,
             )
             with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
+                st.warning("Synthetic evidence only: this pack cites fabricated records from the demo corpus, not real enterprise data.")
                 st.markdown("#### Evidence Pack")
                 st.json(agent_evidence)
                 st.markdown("#### 1-2 Page Memo Draft")
@@ -692,6 +713,7 @@ with tab_workflow:
         workflow_evidence = extract_workflow_evidence(result)
         workflow_memo = build_workflow_memo(workflow_evidence)
         with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
+            st.warning("Synthetic evidence only: this pack cites fabricated records from the demo corpus, not real enterprise data.")
             st.markdown("#### Evidence Pack")
             st.json(workflow_evidence)
             st.markdown("#### 1-2 Page Memo Draft")
@@ -713,9 +735,17 @@ with tab_docs:
     st.markdown("""
     ### Document Intelligence (RAG)
     Search and query across TeraWave program documents — contracts, vendor memos,
-    policy docs, technical reports, and pipeline reviews. AI answers are **grounded
-    in source documents** with citations.
+    policy docs, technical reports, and pipeline reviews. These are **synthetic
+    source documents** fabricated for the demo, and AI answers are grounded in
+    those synthetic documents with citations.
     """)
+
+    st.markdown(
+        '<div class="synthetic-callout"><span class="synthetic-pill">SYNTHETIC RAG CORPUS</span>'
+        f'The document library below is loaded from <code>{source_meta["dataset_id"]}</code>. '
+        'It is designed to behave like a SharePoint evidence store, but every document is fictional.</div>',
+        unsafe_allow_html=True,
+    )
 
     # Document library
     all_docs = get_all_documents()
@@ -724,9 +754,10 @@ with tab_docs:
     with doc_col1:
         st.subheader("Document Library")
         for doc in all_docs:
-            type_label = f"[{doc.doc_type.upper()}]"
+            type_label = f"[SYNTHETIC {doc.doc_type.upper()}]"
             with st.expander(f"{type_label} {doc.title[:50]}..."):
                 st.markdown(f"**Type:** {doc.doc_type.title()} | **Source:** {doc.source} | **Date:** {doc.date}")
+                st.caption("Synthetic demo document. Not an actual Blue Origin record.")
                 if doc.metadata:
                     meta_str = " | ".join(f"{k}: {v}" for k, v in doc.metadata.items())
                     st.markdown(f"**Metadata:** {meta_str}")
@@ -752,8 +783,8 @@ with tab_docs:
                     st.session_state["doc_query"] = sug
                     st.rerun()
 
-        query = st.text_input("Search documents...", value=st.session_state.get("doc_query", ""),
-                              placeholder="Ask anything about TeraWave program documents...")
+        query = st.text_input("Search synthetic documents...", value=st.session_state.get("doc_query", ""),
+                              placeholder="Ask anything about the synthetic TeraWave document corpus...")
 
         if query:
             # Retrieve relevant documents
@@ -764,9 +795,10 @@ with tab_docs:
 
                 # Show retrieved chunks with relevance scores
                 for doc, score in results:
-                    type_label = f"[{doc.doc_type.upper()}]"
+                    type_label = f"[SYNTHETIC {doc.doc_type.upper()}]"
                     with st.expander(f"{type_label} {doc.title} — Relevance: {score:.0%}", expanded=(score > 0.2)):
                         st.markdown(f"**{doc.doc_type.title()}** | {doc.source} | {doc.date}")
+                        st.caption("Synthetic demo document. Not an actual Blue Origin record.")
                         # Show content preview (first 1000 chars)
                         preview = doc.content[:1500] + ("..." if len(doc.content) > 1500 else "")
                         st.text(preview)
@@ -968,11 +1000,18 @@ with tab_project:
     concise investment memo.
     """)
 
+    st.markdown(
+        '<div class="synthetic-callout"><span class="synthetic-pill">IMPORTANT: SYNTHETIC DATA</span>'
+        'For the final report and demo, describe this as a working prototype grounded in a fabricated evidence corpus. '
+        'The system demonstrates architecture, workflow, and evaluation logic; it does not use real Blue Origin data.</div>',
+        unsafe_allow_html=True,
+    )
+
     st.subheader("Rubric Alignment")
     rubric_rows = [
         {
             "Rubric area": "Problem Choice & Business Value (30%)",
-            "How TeraWave answers it": "Targets analyst time lost assembling CapEx evidence from ERP, planning, procurement, workflow, and document systems.",
+            "How TeraWave answers it": "Targets analyst time lost assembling CapEx evidence from ERP, planning, procurement, workflow, and document systems using synthetic source records.",
         },
         {
             "Rubric area": "Technical Depth (35%)",
@@ -1009,9 +1048,10 @@ with tab_project:
     - Priority / urgency: **{DEMO_DAY_SCENARIO['priority_tag']} / {DEMO_DAY_SCENARIO['urgency']}**
 
     Show the live tool trace first, then the recommendation, then the generated
-    evidence pack and memo. Close by explaining that production deployment would
-    require human approval, source-system permissions, privacy controls, and
-    prompt-injection defenses.
+    evidence pack and memo. Explicitly point out that the evidence pack is
+    synthetic and traceable to `{source_meta['dataset_id']}`. Close by explaining
+    that production deployment would require human approval, source-system
+    permissions, privacy controls, and prompt-injection defenses.
     """)
 
 # ── Footer ───────────────────────────────────────────────────────────────────

@@ -55,11 +55,14 @@ from models.variance_engine import (
     WORKSTREAMS as VARIANCE_WORKSTREAMS,
 )
 from models.final_project import (
-    DEMO_DAY_SCENARIO,
+    DEMO_NARRATIVE_PATHS,
+    evaluation_summary,
     extract_agent_evidence,
     extract_workflow_evidence,
     build_agent_memo,
     build_workflow_memo,
+    run_ground_truth_evaluation,
+    run_repeatability_check,
 )
 from utils.charts import (
     cash_flow_waterfall,
@@ -427,9 +430,21 @@ with tab_workflow:
 
     with wf_col1:
         st.subheader("Submit New Request")
-        if st.button("Load Demo Day Scenario", use_container_width=True):
-            st.session_state["demo_request_defaults"] = DEMO_DAY_SCENARIO
+        st.markdown("**Demo Day Narrative Path**")
+        selected_path = st.selectbox(
+            "Choose a focused walkthrough",
+            list(DEMO_NARRATIVE_PATHS.keys()),
+            label_visibility="collapsed",
+        )
+        path_config = DEMO_NARRATIVE_PATHS[selected_path]
+        st.caption(path_config["why"])
+        if st.button("Load Selected Demo Path", use_container_width=True):
+            st.session_state["demo_request_defaults"] = path_config["request"]
             st.rerun()
+
+        with st.expander("Recommended talk track", expanded=False):
+            for idx, step in enumerate(path_config["talk_track"], start=1):
+                st.markdown(f"**{idx}.** {step}")
 
         demo_defaults = st.session_state.get("demo_request_defaults", {})
         pool_options = list(BUDGET_POOLS.keys())
@@ -511,6 +526,23 @@ with tab_workflow:
         ]
         for name, desc in tool_names:
             st.markdown(f'<span class="tool-badge">{name}</span> {desc}', unsafe_allow_html=True)
+
+        with st.expander("Evaluation Evidence", expanded=False):
+            summary = evaluation_summary()
+            ev1, ev2 = st.columns(2)
+            ev1.metric("Ground Truth Pass Rate", summary["ground_truth_pass_rate"])
+            ev2.metric("Repeatability", f"{summary['recommendation_consistency_pct']:.0f}%")
+            st.caption(
+                f"Same request repeated 5 times: NPV range ${summary['npv_range_m']}M, "
+                f"ROI range {summary['roi_range_pct']} pts."
+            )
+
+            st.markdown("**Ground-truth scenarios**")
+            st.dataframe(pd.DataFrame(run_ground_truth_evaluation()), use_container_width=True, hide_index=True)
+
+            st.markdown("**Repeatability check**")
+            repeatability = run_repeatability_check()
+            st.json(public_evidence_view(repeatability))
 
     # Process agentic workflow
     if submitted:

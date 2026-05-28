@@ -12,7 +12,8 @@ auditable workflow."
 
 ## Demo Scenario
 
-Use the CapEx Workflow tab and click **Load Demo Day Scenario**.
+Use the CapEx Workflow tab and select **Recommended: Critical-path acceleration**
+from the Demo Day Narrative Path selector. Click **Load Selected Demo Path**.
 
 Scenario:
 
@@ -31,14 +32,21 @@ it may be worth approving with controls."
 
 ## Live Walkthrough
 
-1. Submit the demo request.
-2. Show the agent's live tool trace.
-3. Point out that the agent chooses tools rather than following a fixed script.
-4. Highlight the recommendation: GO, CONDITIONAL GO, DEFER, or NO-GO.
-5. Open the Evidence Pack & Concise Investment Memo expander.
-6. Show that the memo cites the same budget, financial, routing, precedent,
-   variance, and document evidence surfaced by the workflow.
-7. Download the memo to show the tangible deliverable.
+Protect time by staying in one narrative path:
+
+1. Start in the CapEx Workflow tab, not the broader valuation dashboard.
+2. Load the recommended critical-path acceleration path.
+3. Submit the demo request.
+4. Show the live tool trace and point out that the agent chooses tools rather
+   than following a fixed script.
+5. Highlight the recommendation: GO, CONDITIONAL GO, DEFER, or NO-GO.
+6. Open the Evidence Pack & Concise Investment Memo expander.
+7. Show that the memo names the tools called and cites the same budget,
+   financial, routing, precedent, variance, and document evidence surfaced by
+   the workflow.
+8. Download the memo to show the tangible deliverable.
+9. Open the Evaluation Evidence expander and show the repeatability and
+   ground-truth test summary.
 
 ## What To Emphasize
 
@@ -49,6 +57,10 @@ it may be worth approving with controls."
 - The evaluation is scenario-based: each test checks whether the agent called
   the right tools, used evidence correctly, kept numbers consistent, and made a
   sensible recommendation.
+- Repeatability matters: the same critical-path request is run 5 times and
+  summarized with recommendation consistency, NPV range, and ROI range.
+- Ground-truth scenarios matter: the app includes clearly approve, clearly
+  reject, and ambiguous / conditional cases with expected vs. observed labels.
 
 ## Deployment Trade-Offs
 

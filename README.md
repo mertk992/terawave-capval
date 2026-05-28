@@ -35,8 +35,8 @@ goal is to **accelerate deployment**, not simply suppress costs.
 2. **Capital Efficiency Framework** — Maps each workstream by progress contribution and risk retirement value per dollar deployed
 3. **Monte Carlo Simulation** — 2,500+ correlated simulations producing probabilistic NPV/IRR/payback distributions with sensitivity analysis
 4. **Agentic CapEx Workflow** — Claude chooses and chains tools for budget, RAG, comparables, financial impact, approval routing, and variance evidence
-5. **Evidence Pack + Memo** — The app converts tool outputs into a concise investment memo that can be downloaded after the workflow
-6. **Final Project Pack** — A rubric-aligned tab with evaluation scenarios, success metrics, report outline, and demo script
+5. **Evidence Pack + Memo** — The app converts tool outputs into a concise investment memo that names the tools called and the evidence driving the recommendation
+6. **Demo Path + Evaluation Evidence** — The CapEx Workflow tab includes focused Demo Day narrative paths, ground-truth scenario tests, and repeatability checks
 
 ### Synthetic Evidence Corpus
 
@@ -74,15 +74,13 @@ is clearly labeled as synthetic.
 
 ## Evaluation Plan
 
-The final report should evaluate the prototype with 4-6 realistic request
-scenarios. Score each run on:
+The final report should evaluate the prototype with concrete evidence from the
+app's CapEx Workflow evaluation panel:
 
-- Tool-selection accuracy
-- Recommendation correctness
-- Evidence grounding and source citations
-- Numerical consistency across tool outputs and memo
-- Business usability for a non-technical finance audience
-- Estimated cycle-time compression from manual memo assembly
+- **Repeatability:** run the same critical-path CapEx request five times and report recommendation consistency, NPV range, and ROI range.
+- **Ground-truth tests:** compare expected vs. observed recommendations for clearly approve, clearly reject, and ambiguous / conditional scenarios.
+- **Memo evidence trace:** show that the memo cites budget, financial impact, approval routing, precedent, document-search, and variance evidence.
+- **Business usability:** verify that the recommendation and memo can be understood without reading raw tool logs.
 
 See `FINAL_REPORT_OUTLINE.md` and `DEMO_DAY_SCRIPT.md` for the concise final
 submission structure.

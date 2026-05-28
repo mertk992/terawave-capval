@@ -60,20 +60,29 @@ Rubric fit: Technical Depth.
 
 ## 5. Evaluation And Evidence
 
-Evaluate 4-6 scenarios and show expected vs. observed behavior:
+Use the app's evaluation evidence panel to report two concrete tests:
+
+1. Repeatability: run the same critical-path CapEx request 5 times and report
+   recommendation consistency plus NPV / ROI range.
+2. Ground-truth scenarios: run one clearly approve case, one clearly reject
+   case, and one ambiguous / conditional case, then compare expected vs.
+   observed recommendation.
 
 | Scenario | Expected Behavior | Evidence To Report |
 | --- | --- | --- |
-| Routine satellite component reorder | Short tool chain, GO if budget is healthy | Budget, comparables, financial impact |
-| Critical-path launch acceleration | CONDITIONAL GO with CFO routing | Budget, NPV/ROI, approval tier, launch evidence |
-| Request in overspending workstream | DEFER or CONDITIONAL with reallocation | Variance status, policy, budget |
-| Risk-retirement investment | GO when risk-retired-per-dollar is high | Document search, risk score, financial impact |
-| Incomplete request | Clarifying question, DEFER, or conditions | Validation and missing rationale |
-| Board-level request | Board routing and explicit trade-offs | Approval policy, budget, memo decision points |
+| Repeatability check | Same recommendation across 5 runs | Recommendation consistency %, NPV range, ROI range |
+| Clearly approve | Approve | Budget fit, high NPV / ROI, strong risk-retirement rationale |
+| Clearly reject | Reject | Budget breach, low strategic fit, approval burden |
+| Ambiguous / conditional | Approve with Conditions | Budget fit but weaker strategic fit, milestone controls |
 
 Score each run on tool-selection accuracy, recommendation correctness, evidence
 grounding, numerical consistency, business usability, and estimated cycle-time
 compression.
+
+The memo should be used as an evaluation artifact. It should explicitly cite
+which tools were called and the specific evidence behind the recommendation,
+such as remaining budget headroom, NPV impact, approval tier, comparable
+requests, source documents, and variance context.
 
 Rubric fit: Evaluation & Evidence.
 

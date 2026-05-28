@@ -11,6 +11,7 @@ Replaces what is typically a spreadsheet + email chain process.
 
 from __future__ import annotations
 
+import hashlib
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
@@ -182,7 +183,7 @@ def _step_financial_analysis(req: CapExRequest, res: WorkflowResult):
     mult = priority_multipliers.get(req.priority_tag, 1.5)
 
     # NPV estimate (synthetic — based on priority type and amount)
-    res.npv_impact_m = round(req.amount_m * mult * (1 + np.random.RandomState(hash(req.title) % 2**31).uniform(-0.3, 0.3)), 1)
+    res.npv_impact_m = round(req.amount_m * mult * (1 + np.random.RandomState(_stable_seed(req.title)).uniform(-0.3, 0.3)), 1)
     res.payback_months = max(3, int(req.expected_completion_months * (req.amount_m / (res.npv_impact_m + 0.01)) * 12))
     res.payback_months = min(res.payback_months, 60)  # cap at 5 years
     res.roi_pct = round((res.npv_impact_m / req.amount_m - 1) * 100, 1) if req.amount_m > 0 else 0
@@ -323,6 +324,12 @@ def _step_recommend(req: CapExRequest, res: WorkflowResult):
         "status": res.recommendation,
         "details": res.recommendation_rationale,
     })
+
+
+def _stable_seed(text: str) -> int:
+    """Return a deterministic seed so repeat evaluations are comparable."""
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % 2**31
 
 
 def get_historical_df() -> pd.DataFrame:

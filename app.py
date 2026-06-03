@@ -1,8 +1,8 @@
 """
-TeraWave Capital Project Valuation Engine
-==========================================
-An agentic AI system for capital allocation analysis on Blue Origin's
-TeraWave satellite constellation program.
+CapEx Command Center
+====================
+An agentic AI system for finance-led capital allocation analysis and
+CapEx decision workflows.
 
 ALL FINANCIAL DATA IS SYNTHETIC AND FOR DEMONSTRATION PURPOSES ONLY.
 
@@ -80,8 +80,8 @@ from utils.charts import (
 
 # ── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="TeraWave CapVal Engine",
-    page_icon="🛰️",
+    page_title="CapEx Command Center",
+    page_icon="💼",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -118,14 +118,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Header ───────────────────────────────────────────────────────────────────
-st.title("TeraWave Capital Valuation Engine")
-st.markdown('<p class="header-subtitle">Agentic AI System for Capital Allocation Analysis &nbsp;|&nbsp; Blue Origin</p>',
+st.title("CapEx Command Center")
+st.markdown('<p class="header-subtitle">Agentic AI workflow for finance-led CapEx review, evidence gathering, and investment memo generation</p>',
             unsafe_allow_html=True)
 
 st.markdown(
     '<div class="disclaimer"><strong>DEMO DISCLAIMER:</strong> '
-    'This prototype uses illustrative demo data and does not represent actual Blue Origin financials, '
-    'projections, contracts, approvals, or internal records.</div>',
+    'This prototype uses illustrative enterprise finance data. It does not represent actual company financials, '
+    'projections, contracts, approvals, or internal records. The aerospace program is a synthetic case study.</div>',
     unsafe_allow_html=True,
 )
 
@@ -138,6 +138,45 @@ def public_evidence_view(value):
     if isinstance(value, list):
         return [public_evidence_view(item) for item in value]
     return value
+
+
+def clean_business_label(value):
+    """Make synthetic case-study labels read like generic finance workstreams."""
+    if isinstance(value, str):
+        replacements = {
+            "TeraWave — ": "",
+            "TeraWave - ": "",
+            "TeraWave ": "",
+            "TeraWave": "Strategic Program",
+            "Blue Origin's ": "",
+            "Blue Origin ": "",
+            "satellite constellation": "capital program",
+            "constellation": "program",
+            "Satellite Systems LLC": "Capital Program LLC",
+        }
+        cleaned = value
+        for old, new in replacements.items():
+            cleaned = cleaned.replace(old, new)
+        return cleaned
+    return value
+
+
+def clean_display_value(value):
+    """Apply generic finance labels to strings, lists, dicts, and dataframes."""
+    if isinstance(value, str):
+        return clean_business_label(value)
+    if isinstance(value, dict):
+        return {k: clean_display_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [clean_display_value(item) for item in value]
+    return value
+
+
+def clean_display_df(df):
+    display_df = df.copy()
+    for col in display_df.select_dtypes(include="object").columns:
+        display_df[col] = display_df[col].map(clean_business_label)
+    return display_df
 
 # ── Sidebar: Scenario Controls ───────────────────────────────────────────────
 with st.sidebar:
@@ -395,7 +434,7 @@ with tab_variance:
                 for a in alerts[:8]:
                     var_context += f"- {a.workstream} ({a.month}): {a.variance_pct:+.0f}% — {a.auto_commentary}\n"
 
-                variance_prompt = """You are a senior FP&A analyst writing the monthly variance commentary for Blue Origin's TeraWave program.
+                variance_prompt = """You are a senior FP&A analyst writing the monthly variance commentary for a capital-intensive strategic program.
 Write a concise executive summary (3-4 paragraphs) covering:
 1. Overall program spend status vs. plan
 2. Top 2-3 workstreams requiring attention (with specific numbers)
@@ -469,6 +508,7 @@ with tab_workflow:
                 pool_options,
                 index=pool_options.index(demo_defaults.get("budget_pool", pool_options[0]))
                 if demo_defaults.get("budget_pool") in pool_options else 0,
+                format_func=clean_business_label,
             )
             req_amount = fc2.number_input(
                 "Amount ($M)",
@@ -509,7 +549,7 @@ with tab_workflow:
         st.subheader("Budget Status")
         budget_df = get_budget_summary()
         for _, row in budget_df.iterrows():
-            pool_name = row["Budget Pool"].replace("TeraWave — ", "")
+            pool_name = clean_business_label(row["Budget Pool"])
             utilization = float(row["Utilization"].strip("%"))
             status = "OK" if utilization < 70 else "Watch" if utilization < 90 else "At risk"
             st.markdown(f"**{pool_name}** — ${row['Available ($M)']:,.0f}M avail ({row['Utilization']}) · {status}")
@@ -574,7 +614,7 @@ with tab_workflow:
                 title=req_title,
                 description=req_desc,
                 requestor=req_requestor,
-                department="TeraWave Program",
+                department="Strategic Capital Program",
                 budget_pool=req_pool,
                 amount_m=req_amount,
                 priority_tag=req_priority,
@@ -667,15 +707,16 @@ with tab_workflow:
                 st.session_state.get("latest_request_payload", {}),
                 agent_evidence,
             )
+            display_agent_memo = clean_business_label(agent_memo)
             with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
                 st.markdown("#### Evidence Pack")
-                st.json(public_evidence_view(agent_evidence))
-                st.markdown("#### 1-2 Page Memo Draft")
-                st.markdown(agent_memo)
+                st.json(clean_display_value(public_evidence_view(agent_evidence)))
+                st.markdown("#### Investment Committee Memo Draft")
+                st.markdown(display_agent_memo)
                 st.download_button(
                     "Download memo (.md)",
-                    data=agent_memo,
-                    file_name="terawave_investment_memo.md",
+                    data=display_agent_memo,
+                    file_name="capex_investment_memo.md",
                     mime="text/markdown",
                     use_container_width=True,
                 )
@@ -727,15 +768,16 @@ with tab_workflow:
 
         workflow_evidence = extract_workflow_evidence(result)
         workflow_memo = build_workflow_memo(workflow_evidence)
+        display_workflow_memo = clean_business_label(workflow_memo)
         with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
             st.markdown("#### Evidence Pack")
-            st.json(public_evidence_view(workflow_evidence))
-            st.markdown("#### 1-2 Page Memo Draft")
-            st.markdown(workflow_memo)
+            st.json(clean_display_value(public_evidence_view(workflow_evidence)))
+            st.markdown("#### Investment Committee Memo Draft")
+            st.markdown(display_workflow_memo)
             st.download_button(
                 "Download memo (.md)",
-                data=workflow_memo,
-                file_name="terawave_investment_memo.md",
+                data=display_workflow_memo,
+                file_name="capex_investment_memo.md",
                 mime="text/markdown",
                 use_container_width=True,
             )
@@ -744,14 +786,14 @@ with tab_workflow:
     with st.expander("Historical CapEx Requests"):
         historical_df = get_historical_df()
         hidden_cols = [col for col in ["source_system", "source_file", "dataset_id", "synthetic"] if col in historical_df.columns]
-        st.dataframe(historical_df.drop(columns=hidden_cols), use_container_width=True, hide_index=True)
+        st.dataframe(clean_display_df(historical_df.drop(columns=hidden_cols)), use_container_width=True, hide_index=True)
 
 # ── Tab 7: Document Intelligence ─────────────────────────────────────────────
 with tab_docs:
     st.markdown("""
     ### Document Intelligence (RAG)
-    Search and query across TeraWave program documents — contracts, vendor memos,
-    policy docs, technical reports, and pipeline reviews. AI answers are grounded
+    Search and query across the synthetic capital program evidence base — contracts,
+    vendor memos, policy docs, technical reports, and pipeline reviews. AI answers are grounded
     in source documents with citations.
     """)
 
@@ -763,11 +805,11 @@ with tab_docs:
         st.subheader("Document Library")
         for doc in all_docs:
             type_label = f"[{doc.doc_type.upper()}]"
-            with st.expander(f"{type_label} {doc.title[:50]}..."):
+            with st.expander(f"{type_label} {clean_business_label(doc.title)[:50]}..."):
                 source_label = doc.source.replace("Synthetic ", "")
-                st.markdown(f"**Type:** {doc.doc_type.title()} | **Source:** {source_label} | **Date:** {doc.date}")
+                st.markdown(f"**Type:** {doc.doc_type.title()} | **Source:** {clean_business_label(source_label)} | **Date:** {doc.date}")
                 if doc.metadata:
-                    metadata = public_evidence_view(doc.metadata)
+                    metadata = clean_display_value(public_evidence_view(doc.metadata))
                     meta_str = " | ".join(f"{k}: {v}" for k, v in metadata.items())
                     st.markdown(f"**Metadata:** {meta_str}")
                 st.markdown(f"*{len(doc.content)} characters*")
@@ -780,11 +822,11 @@ with tab_docs:
             st.markdown("**Try these queries:**")
             doc_suggestions = [
                 "What are the SLA requirements in the DataLink ground services contract?",
-                "Which vendor was selected for the MEO satellite bus and why?",
+                "Which supplier was selected for the major program component and why?",
                 "What is the capital allocation policy for emergency requests?",
-                "What are the key risks for the optical inter-satellite link system?",
+                "What are the key technical risks in the program risk assessment?",
                 "What is the enterprise customer pipeline value and which segments are largest?",
-                "How many launches are needed for the full constellation?",
+                "What deployment capacity is required to complete the program plan?",
             ]
             dcols = st.columns(2)
             for i, sug in enumerate(doc_suggestions):
@@ -793,7 +835,7 @@ with tab_docs:
                     st.rerun()
 
         query = st.text_input("Search documents...", value=st.session_state.get("doc_query", ""),
-                              placeholder="Ask anything about TeraWave program documents...")
+                              placeholder="Ask anything about the synthetic capital program documents...")
 
         if query:
             # Retrieve relevant documents
@@ -805,11 +847,11 @@ with tab_docs:
                 # Show retrieved chunks with relevance scores
                 for doc, score in results:
                     type_label = f"[{doc.doc_type.upper()}]"
-                    with st.expander(f"{type_label} {doc.title} — Relevance: {score:.0%}", expanded=(score > 0.2)):
+                    with st.expander(f"{type_label} {clean_business_label(doc.title)} — Relevance: {score:.0%}", expanded=(score > 0.2)):
                         source_label = doc.source.replace("Synthetic ", "")
-                        st.markdown(f"**{doc.doc_type.title()}** | {source_label} | {doc.date}")
+                        st.markdown(f"**{doc.doc_type.title()}** | {clean_business_label(source_label)} | {doc.date}")
                         # Show content preview (first 1000 chars)
-                        preview = doc.content[:1500] + ("..." if len(doc.content) > 1500 else "")
+                        preview = clean_business_label(doc.content[:1500] + ("..." if len(doc.content) > 1500 else ""))
                         st.text(preview)
 
                 # AI-powered Q&A
@@ -902,7 +944,7 @@ with tab_agent:
             st.markdown(prompt)
 
     # Chat input
-    if prompt := st.chat_input("Ask about TeraWave — the agent will gather data autonomously..."):
+    if prompt := st.chat_input("Ask about the capital program — the agent will gather data autonomously..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -1001,7 +1043,7 @@ st.divider()
 st.markdown(
     '<div style="text-align:center; color:#666; font-size:0.85em;">'
     'Illustrative demo data only.<br>'
-    'TeraWave Capital Valuation Engine — Built with Python, Streamlit, Claude (Anthropic)<br>'
+    'CapEx Command Center — Built with Python, Streamlit, Claude (Anthropic)<br>'
     'Agentic AI × Corporate Finance'
     '</div>',
     unsafe_allow_html=True,

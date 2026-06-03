@@ -258,28 +258,32 @@ metrics = compute_npv(projection, assumptions)
 capex_df = compute_capex_schedule(assumptions)
 progress_df = compute_progress_metrics(assumptions)
 
-# ── Key Metrics Row ──────────────────────────────────────────────────────────
-st.subheader("Key Metrics — Deterministic Base Case")
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("NPV", f"${metrics['npv_m']:,.0f}M",
-          delta=f"{'Positive' if metrics['npv_m'] > 0 else 'Negative'}")
-m2.metric("IRR", f"{metrics['irr_pct']:.1f}%" if metrics['irr_pct'] else "N/A")
-m3.metric("Payback Year", f"{metrics['payback_calendar_year']}" if metrics['payback_year'] else "Beyond horizon")
-m4.metric("Total CapEx", f"${metrics['total_capex_m']:,.0f}M")
-m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
-
 # ── Tabs ─────────────────────────────────────────────────────────────────────
-tab_cashflow, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent = st.tabs([
-    "Cash Flow",
-    "Monte Carlo",
-    "Variance",
-    "CapEx Workflow",
-    "Doc Intel",
-    "AI Agents",
+tab_workflow, tab_cashflow, tab_mc, tab_variance, tab_docs, tab_agent = st.tabs([
+    "CapEx Decision Workflow",
+    "Financial Model",
+    "Monte Carlo Risk",
+    "FP&A Variance",
+    "Document Evidence",
+    "AI Agent Console",
 ])
 
 # ── Tab 1: Cash Flow ─────────────────────────────────────────────────────────
 with tab_cashflow:
+    st.markdown("""
+    ### Supporting Financial Model
+    This tab is the drill-down behind the CapEx decision workflow: deterministic
+    NPV, IRR, payback, cash-flow timing, and CapEx workstream allocation.
+    """)
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("NPV", f"${metrics['npv_m']:,.0f}M",
+              delta=f"{'Positive' if metrics['npv_m'] > 0 else 'Negative'}")
+    m2.metric("IRR", f"{metrics['irr_pct']:.1f}%" if metrics['irr_pct'] else "N/A")
+    m3.metric("Payback Year", f"{metrics['payback_calendar_year']}" if metrics['payback_year'] else "Beyond horizon")
+    m4.metric("Total CapEx", f"${metrics['total_capex_m']:,.0f}M")
+    m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
+
     col1, col2 = st.columns(2)
     with col1:
         st.plotly_chart(cash_flow_waterfall(projection), use_container_width=True)
@@ -455,6 +459,11 @@ with tab_workflow:
     think in real-time.
     """)
 
+    st.info(
+        "Start here for the demo: review the prefilled request, click **Run Agentic Analysis**, "
+        "then inspect the recommendation, evidence pack, and investment memo."
+    )
+
     st.markdown(
         '<div class="agentic-banner">'
         '<strong>How this works:</strong> The agent receives your request and a set of tools '
@@ -485,7 +494,7 @@ with tab_workflow:
             for idx, step in enumerate(path_config["talk_track"], start=1):
                 st.markdown(f"**{idx}.** {step}")
 
-        demo_defaults = st.session_state.get("demo_request_defaults", {})
+        demo_defaults = st.session_state.get("demo_request_defaults", path_config["request"])
         pool_options = list(BUDGET_POOLS.keys())
         priority_options = PRIORITY_TAGS
         urgency_options = URGENCY_LEVELS

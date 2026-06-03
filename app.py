@@ -808,5 +808,4 @@ def index_or_zero(options: list[str], value: Any) -> int:
     return options.index(value) if value in options else 0
 
 
-if __name__ == "__main__":
-    main()
+main()

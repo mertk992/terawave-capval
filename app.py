@@ -1,943 +1,1008 @@
 """
-CapExFlow AI
-============
+TeraWave Capital Project Valuation Engine
+==========================================
+An agentic AI system for capital allocation analysis on Blue Origin's
+TeraWave satellite constellation program.
 
-Focused Streamlit prototype for finance-led CapEx decision support.
-All data is synthetic and for demonstration only.
+ALL FINANCIAL DATA IS SYNTHETIC AND FOR DEMONSTRATION PURPOSES ONLY.
+
+Run: streamlit run app.py
 """
 
-from __future__ import annotations
-
-import hashlib
-import json
-import re
-import time
-from datetime import date
-from pathlib import Path
-from typing import Any
-
 import streamlit as st
+import pandas as pd
+import numpy as np
+import json
+import sys
+import os
 
+sys.path.insert(0, os.path.dirname(__file__))
 
-APP_TITLE = "CapExFlow AI"
-APP_SUBTITLE = "Finance workflow automation for evidence-backed capital allocation"
-DATA_PATH = Path(__file__).parent / "data" / "synthetic_enterprise_data.json"
+import config
+from models.financial_model import (
+    ScenarioAssumptions,
+    build_full_projection,
+    compute_npv,
+    compute_capex_schedule,
+    compute_progress_metrics,
+)
+from models.monte_carlo import run_monte_carlo, tornado_analysis
+from models.capex_workflow import (
+    CapExRequest,
+    run_capex_workflow,
+    get_historical_df,
+    get_budget_summary,
+    BUDGET_POOLS,
+    PRIORITY_TAGS,
+    URGENCY_LEVELS,
+)
+from models.rag_engine import (
+    search_documents,
+    get_all_documents,
+    format_context_for_llm,
+)
+from agents.agentic_engine import (
+    run_capex_analysis,
+    run_general_query,
+    AgentStep,
+    AgentResult,
+)
+from models.variance_engine import (
+    build_variance_table,
+    detect_anomalies,
+    get_ytd_summary,
+    get_monthly_trend,
+    WORKSTREAMS as VARIANCE_WORKSTREAMS,
+)
+from models.final_project import (
+    DEMO_NARRATIVE_PATHS,
+    evaluation_summary,
+    extract_agent_evidence,
+    extract_workflow_evidence,
+    build_agent_memo,
+    build_workflow_memo,
+    run_ground_truth_evaluation,
+    run_repeatability_check,
+)
+from utils.charts import (
+    cash_flow_waterfall,
+    cumulative_investment_chart,
+    npv_distribution_chart,
+    tornado_chart,
+    progress_per_dollar_chart,
+    capex_by_workstream_chart,
+    scenario_comparison_chart,
+    variance_waterfall,
+    variance_heatmap,
+    budget_vs_actual_trend,
+    cumulative_variance_chart,
+)
 
-PRIORITY_TAGS = [
-    "Critical Path",
-    "Risk Retirement",
-    "Cost Reduction",
-    "Capacity Expansion",
-    "R&D / Innovation",
-    "Maintenance",
-]
-URGENCY_LEVELS = ["Standard", "Expedited", "Emergency"]
+# ── Page Config ──────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="TeraWave CapVal Engine",
+    page_icon="🛰️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-DEMO_DAY_SCENARIO = {
-    "title": "Critical-Path Launch Acceleration Package",
-    "description": "Add integration shifts and readiness work to pull the first operational deployment window forward.",
-    "budget_pool": "TeraWave — Launch Services",
-    "amount_m": 45.0,
-    "priority_tag": "Critical Path",
-    "urgency": "Expedited",
-    "completion_months": 9,
-    "justification": (
-        "Funding accelerates launch readiness, reduces schedule risk for initial operational capability, "
-        "and creates more progress per dollar than holding the launch cadence flat."
-    ),
-}
+# ── Custom CSS ───────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+    .stMetric { background-color: #1E2530; padding: 12px; border-radius: 8px; }
+    .disclaimer {
+        background-color: #2C1810; border: 1px solid #FF6B35; border-radius: 8px;
+        padding: 12px 16px; margin-bottom: 16px; font-size: 0.85em; color: #FFB088;
+    }
+    .agent-badge {
+        display: inline-block; background: #0066CC; color: white; padding: 2px 10px;
+        border-radius: 12px; font-size: 0.8em; font-weight: 600; margin-bottom: 8px;
+    }
+    .tool-badge {
+        display: inline-block; background: #1a1a2e; border: 1px solid #00A3E0;
+        color: #00A3E0; padding: 2px 8px; border-radius: 6px; font-size: 0.75em;
+        font-family: monospace; margin: 2px;
+    }
+    .step-header {
+        display: flex; align-items: center; gap: 8px;
+        font-weight: 600; font-size: 0.95em;
+    }
+    .agentic-banner {
+        background: linear-gradient(135deg, #0a1628, #1a1a2e);
+        border: 1px solid #0066CC; border-radius: 8px;
+        padding: 12px 16px; margin-bottom: 16px; font-size: 0.9em;
+    }
+    .header-subtitle { color: #95A5A6; font-size: 1.1em; margin-top: -10px; }
+    div[data-testid="stSidebar"] { background-color: #0a0e14; }
+</style>
+""", unsafe_allow_html=True)
 
-VARIANCE_STATUS = {
-    "Launch Services": {
-        "workstream": "Launch Services",
-        "ytd_budget_m": 115.0,
-        "ytd_actual_m": 116.8,
-        "ytd_variance_m": 1.8,
-        "ytd_variance_pct": 1.6,
-        "status": "On plan",
-        "commentary": "Minor month-to-month timing shifts; no material overspend signal.",
-    },
-    "Ground Segment & Gateways": {
-        "workstream": "Ground Segment & Gateways",
-        "ytd_budget_m": 178.0,
-        "ytd_actual_m": 192.5,
-        "ytd_variance_m": 14.5,
-        "ytd_variance_pct": 8.1,
-        "status": "Watch",
-        "commentary": "Site acquisition and backhaul timing are creating YTD pressure.",
-    },
-    "Optical Inter-Satellite Links": {
-        "workstream": "Optical Inter-Satellite Links",
-        "ytd_budget_m": 98.0,
-        "ytd_actual_m": 91.3,
-        "ytd_variance_m": -6.7,
-        "ytd_variance_pct": -6.8,
-        "status": "Underrun",
-        "commentary": "Prototype hardware receipts moved later in the year.",
-    },
-    "Software & Network Ops": {
-        "workstream": "Software & Network Ops",
-        "ytd_budget_m": 60.0,
-        "ytd_actual_m": 63.4,
-        "ytd_variance_m": 3.4,
-        "ytd_variance_pct": 5.7,
-        "status": "Watch",
-        "commentary": "Cloud test environments are running above plan.",
-    },
-    "Satellite Manufacturing (LEO)": {
-        "workstream": "Satellite Manufacturing (LEO)",
-        "ytd_budget_m": 200.0,
-        "ytd_actual_m": 188.2,
-        "ytd_variance_m": -11.8,
-        "ytd_variance_pct": -5.9,
-        "status": "Underrun",
-        "commentary": "Supplier NRE milestones are slightly behind billing plan.",
-    },
-}
-
-st.set_page_config(page_title=APP_TITLE, page_icon="CF", layout="wide", initial_sidebar_state="expanded")
+# ── Header ───────────────────────────────────────────────────────────────────
+st.title("TeraWave Capital Valuation Engine")
+st.markdown('<p class="header-subtitle">Agentic AI System for Capital Allocation Analysis &nbsp;|&nbsp; Blue Origin</p>',
+            unsafe_allow_html=True)
 
 st.markdown(
-    """
-    <style>
-    :root {
-        --panel: #111d2e;
-        --panel2: #17263d;
-        --border: rgba(143, 179, 229, 0.25);
-        --cyan: #35c2ff;
-        --blue: #2d7ff9;
-        --green: #35d07f;
-        --amber: #f5b84b;
-        --muted: #a9b8cc;
-    }
-    .block-container { padding-top: 2rem; max-width: 1240px; }
-    div[data-testid="stSidebar"] { background: linear-gradient(180deg, #07111f, #101827); }
-    .hero {
-        padding: 30px 34px;
-        border-radius: 22px;
-        background: radial-gradient(circle at top right, rgba(53,194,255,.20), transparent 28%),
-                    linear-gradient(135deg, #07111f, #122641 58%, #1b3352);
-        border: 1px solid var(--border);
-        box-shadow: 0 22px 80px rgba(0,0,0,.30);
-        margin-bottom: 22px;
-    }
-    .hero h1 { font-size: 3rem; letter-spacing: -.055em; line-height: 1.02; margin: 0 0 10px; }
-    .hero p { color: #d8e6fb; font-size: 1.05rem; max-width: 850px; margin: 0; }
-    .pill {
-        display: inline-flex; padding: 5px 10px; border-radius: 999px;
-        border: 1px solid rgba(53,194,255,.30); background: rgba(53,194,255,.09);
-        color: #cfeeff; font-size: .78rem; font-weight: 750; letter-spacing: .06em;
-        text-transform: uppercase; margin-bottom: 14px;
-    }
-    .step-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin: 16px 0 8px; }
-    .card, .step-card, .evidence-card {
-        border: 1px solid var(--border); border-radius: 16px;
-        background: linear-gradient(180deg, rgba(23,35,55,.96), rgba(12,22,36,.96));
-        padding: 15px; min-height: 100%;
-    }
-    .step-num, .small-heading { color: var(--cyan); font-size: .75rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
-    .step-title { margin-top: 4px; color: #f7fbff; font-weight: 780; }
-    .step-copy, .muted { color: var(--muted); font-size: .88rem; }
-    .tool-chip {
-        display: inline-block; color: #d7efff; background: rgba(45,127,249,.12);
-        border: 1px solid rgba(45,127,249,.28); border-radius: 999px;
-        padding: 4px 9px; font-size: .78rem; font-family: ui-monospace, Menlo, Consolas, monospace;
-        margin: 0 5px 6px 0;
-    }
-    .recommendation {
-        border-radius: 20px; padding: 24px 26px; border: 1px solid rgba(245,184,75,.35);
-        background: radial-gradient(circle at top right, rgba(245,184,75,.18), transparent 32%),
-                    linear-gradient(135deg, rgba(38,27,10,.92), rgba(19,26,40,.96));
-        margin: 12px 0 18px;
-    }
-    .recommendation h2 { margin: 4px 0; font-size: 2rem; letter-spacing: -.03em; }
-    .rec-label { color: var(--amber); font-size: .78rem; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
-    .citation { color: #b8d9ff; font-size: .82rem; font-family: ui-monospace, Menlo, Consolas, monospace; }
-    .disclaimer { border: 1px solid rgba(245,184,75,.32); background: rgba(245,184,75,.09); color: #ffe2aa; border-radius: 14px; padding: 12px 14px; font-size: .86rem; }
-    @media (max-width: 900px) { .step-row { grid-template-columns: 1fr; } .hero h1 { font-size: 2.15rem; } }
-    </style>
-    """,
+    '<div class="disclaimer"><strong>DEMO DISCLAIMER:</strong> '
+    'This prototype uses illustrative demo data and does not represent actual Blue Origin financials, '
+    'projections, contracts, approvals, or internal records.</div>',
     unsafe_allow_html=True,
 )
 
 
-@st.cache_data(show_spinner=False)
-def load_data() -> dict[str, Any]:
-    with DATA_PATH.open("r", encoding="utf-8") as f:
-        return json.load(f)
+def public_evidence_view(value):
+    """Hide internal data-source metadata in user-facing JSON views."""
+    hidden_keys = {"synthetic", "source_file", "dataset_id", "data_status"}
+    if isinstance(value, dict):
+        return {k: public_evidence_view(v) for k, v in value.items() if k not in hidden_keys}
+    if isinstance(value, list):
+        return [public_evidence_view(item) for item in value]
+    return value
 
+# ── Sidebar: Scenario Controls ───────────────────────────────────────────────
+with st.sidebar:
+    st.header("Scenario Parameters")
+    st.caption("Adjust assumptions to explore scenarios")
 
-def main() -> None:
-    with st.sidebar:
-        st.markdown("### Workflow Guide")
-        st.caption("One finance process, from intake to memo.")
-        page = st.radio(
-            "Sections",
-            ["Overview", "CapEx Workflow", "Evaluation Evidence", "Implementation Notes"],
-            index=1,
+    st.subheader("Financial Assumptions")
+    capex_mult = st.slider("CapEx Multiplier", 0.7, 1.5, 1.0, 0.05,
+                           help="1.0 = base case. >1 = cost overrun, <1 = cost savings")
+    rev_mult = st.slider("Revenue Multiplier", 0.5, 1.5, 1.0, 0.05,
+                         help="1.0 = base case. Scales all revenue projections")
+    opex_mult = st.slider("OpEx Multiplier", 0.7, 1.3, 1.0, 0.05)
+    wacc = st.slider("WACC / Discount Rate (%)", 8, 18, int(config.WACC * 100), 1)
+    wacc = wacc / 100.0
+
+    st.subheader("Timeline & Deployment")
+    timeline_shift = st.slider("Timeline Shift (years)", -1, 3, 0,
+                               help="Positive = delay, negative = acceleration")
+    cadence = st.selectbox("Deployment Cadence",
+                           ["baseline", "aggressive", "conservative"],
+                           help="Aggressive = front-load spend, compress timelines")
+
+    st.subheader("Monte Carlo")
+    n_sims = st.select_slider("Simulations", [500, 1000, 2500, 5000, 10000], value=2500)
+
+    st.divider()
+    run_mc = st.button("Run Full Analysis", type="primary", use_container_width=True)
+
+    # ── Editable Base Inputs ─────────────────────────────────────────────────
+    st.divider()
+    with st.expander("Edit Base Assumptions", expanded=False):
+        st.caption("Edit the underlying values directly. Multipliers still apply on top.")
+
+        st.markdown("**CapEx by Workstream ($M)**")
+        capex_overrides = {}
+        for item_name, item in config.CAPEX_ITEMS.items():
+            default = item.get("total_cost_m", item.get("unit_cost_m", 0) * item.get("units", 0))
+            short_name = item_name.replace("Satellite Manufacturing ", "Sat Mfg ")
+            val = st.number_input(
+                short_name, min_value=0.0, value=float(default), step=50.0,
+                key=f"capex_{item_name}", format="%.0f",
+            )
+            if val != default:
+                capex_overrides[item_name] = val
+
+        st.markdown("**Annual OpEx ($M/year)**")
+        opex_val = st.number_input(
+            "Base Annual OpEx", min_value=0.0, value=float(config.ANNUAL_OPEX_M),
+            step=25.0, key="opex_base", format="%.0f",
+        )
+        opex_override = opex_val if opex_val != config.ANNUAL_OPEX_M else None
+
+        st.markdown("**Revenue Ramp ($M by year)**")
+        revenue_overrides = {}
+        for yr, rev in config.REVENUE_RAMP.items():
+            val = st.number_input(
+                f"Year {yr} ({2025 + yr})", min_value=0.0, value=float(rev),
+                step=100.0, key=f"rev_{yr}", format="%.0f",
+            )
+            if val != rev:
+                revenue_overrides[yr] = val
+
+# ── Build Base Scenario ──────────────────────────────────────────────────────
+assumptions = ScenarioAssumptions(
+    name="Interactive Scenario",
+    capex_multiplier=capex_mult,
+    revenue_multiplier=rev_mult,
+    timeline_shift_years=timeline_shift,
+    wacc=wacc,
+    opex_multiplier=opex_mult,
+    deployment_cadence=cadence,
+    capex_overrides=capex_overrides,
+    revenue_overrides=revenue_overrides,
+    opex_override=opex_override,
+)
+
+projection = build_full_projection(assumptions)
+metrics = compute_npv(projection, assumptions)
+capex_df = compute_capex_schedule(assumptions)
+progress_df = compute_progress_metrics(assumptions)
+
+# ── Key Metrics Row ──────────────────────────────────────────────────────────
+st.subheader("Key Metrics — Deterministic Base Case")
+m1, m2, m3, m4, m5 = st.columns(5)
+m1.metric("NPV", f"${metrics['npv_m']:,.0f}M",
+          delta=f"{'Positive' if metrics['npv_m'] > 0 else 'Negative'}")
+m2.metric("IRR", f"{metrics['irr_pct']:.1f}%" if metrics['irr_pct'] else "N/A")
+m3.metric("Payback Year", f"{metrics['payback_calendar_year']}" if metrics['payback_year'] else "Beyond horizon")
+m4.metric("Total CapEx", f"${metrics['total_capex_m']:,.0f}M")
+m5.metric("Peak Investment", f"${metrics['peak_investment_m']:,.0f}M")
+
+# ── Tabs ─────────────────────────────────────────────────────────────────────
+tab_cashflow, tab_mc, tab_variance, tab_workflow, tab_docs, tab_agent = st.tabs([
+    "Cash Flow",
+    "Monte Carlo",
+    "Variance",
+    "CapEx Workflow",
+    "Doc Intel",
+    "AI Agents",
+])
+
+# ── Tab 1: Cash Flow ─────────────────────────────────────────────────────────
+with tab_cashflow:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(cash_flow_waterfall(projection), use_container_width=True)
+    with col2:
+        st.plotly_chart(cumulative_investment_chart(projection), use_container_width=True)
+
+    st.plotly_chart(capex_by_workstream_chart(capex_df), use_container_width=True)
+
+    with st.expander("Detailed Projection Table"):
+        display_df = projection.copy()
+        for col in ["capex_m", "opex_m", "revenue_m", "free_cash_flow_m",
+                     "cumulative_investment_m", "cumulative_fcf_m", "dcf_m", "cumulative_dcf_m"]:
+            display_df[col] = display_df[col].apply(lambda x: f"${x:,.1f}M")
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+# ── Tab 2: Monte Carlo ──────────────────────────────────────────────────────
+with tab_mc:
+    if run_mc or "mc_results" in st.session_state:
+        if run_mc:
+            with st.spinner(f"Running {n_sims:,} Monte Carlo simulations..."):
+                mc_results = run_monte_carlo(assumptions, n_simulations=n_sims)
+                st.session_state["mc_results"] = mc_results
+        else:
+            mc_results = st.session_state["mc_results"]
+
+        summary = mc_results.summary
+
+        st.subheader("Probabilistic Outcome Distribution")
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1.metric("P(NPV > 0)", f"{summary['prob_positive_npv']:.0f}%")
+        mc2.metric("NPV P50", f"${summary['npv_p50_m']:,.0f}M")
+        mc3.metric("NPV P10 / P90",
+                    f"${summary['npv_p10_m']:,.0f}M / ${summary['npv_p90_m']:,.0f}M")
+        mc4.metric("Peak Investment P90", f"${summary['peak_investment_p90_m']:,.0f}M")
+
+        st.plotly_chart(
+            npv_distribution_chart(mc_results.npv_distribution, assumptions.wacc),
+            use_container_width=True,
+        )
+
+        col_irr, col_pay = st.columns(2)
+        with col_irr:
+            valid_irr = mc_results.irr_distribution[mc_results.irr_distribution > -50]
+            import plotly.graph_objects as go
+            fig_irr = go.Figure(go.Histogram(x=valid_irr, nbinsx=50,
+                                              marker_color="#00A3E0", opacity=0.75))
+            fig_irr.add_vline(x=assumptions.wacc * 100, line_dash="dash",
+                              line_color="#FF6B35",
+                              annotation_text=f"WACC ({assumptions.wacc:.0%})")
+            fig_irr.update_layout(title="IRR Distribution (%)",
+                                  paper_bgcolor="rgba(0,0,0,0)",
+                                  plot_bgcolor="rgba(0,0,0,0)",
+                                  font=dict(color="#FAFAFA"),
+                                  height=350)
+            st.plotly_chart(fig_irr, use_container_width=True)
+
+        with col_pay:
+            fig_pay = go.Figure(go.Histogram(x=mc_results.payback_distribution, nbinsx=30,
+                                              marker_color="#2ECC71", opacity=0.75))
+            fig_pay.update_layout(title="Payback Period Distribution (Years from Start)",
+                                  paper_bgcolor="rgba(0,0,0,0)",
+                                  plot_bgcolor="rgba(0,0,0,0)",
+                                  font=dict(color="#FAFAFA"),
+                                  height=350)
+            st.plotly_chart(fig_pay, use_container_width=True)
+
+        with st.expander("Full Simulation Summary"):
+            st.json(summary)
+
+    else:
+        st.info("Click **Run Full Analysis** in the sidebar to execute Monte Carlo simulations.")
+
+# ── Tab 4: Variance Dashboard ────────────────────────────────────────────────
+with tab_variance:
+    st.markdown("""
+    ### FP&A Variance Dashboard
+    Monthly budget vs. actual with **automated anomaly detection** and AI-generated
+    variance commentary. This is the monthly close process — automated.
+    """)
+
+    through_month = st.select_slider(
+        "Reporting Period (through month)",
+        options=list(range(1, 13)),
+        value=6,
+        format_func=lambda x: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][x-1] + " 2026",
+    )
+
+    # YTD Summary
+    ytd = get_ytd_summary(through_month)
+    total_budget = ytd["YTD Budget ($M)"].sum()
+    total_actual = ytd["YTD Actual ($M)"].sum()
+    total_var = total_actual - total_budget
+    total_var_pct = (total_var / total_budget * 100) if total_budget > 0 else 0
+
+    vm1, vm2, vm3, vm4 = st.columns(4)
+    vm1.metric("YTD Budget", f"${total_budget:,.0f}M")
+    vm2.metric("YTD Actual", f"${total_actual:,.0f}M")
+    vm3.metric("Total Variance", f"${total_var:+,.1f}M", delta=f"{total_var_pct:+.1f}%",
+               delta_color="inverse")
+    over_count = len(ytd[ytd["YTD Variance (%)"] > 5])
+    under_count = len(ytd[ytd["YTD Variance (%)"] < -5])
+    vm4.metric("Alerts", f"{over_count} over / {under_count} under")
+
+    # Charts
+    vc1, vc2 = st.columns(2)
+    with vc1:
+        st.plotly_chart(variance_waterfall(ytd), use_container_width=True)
+    with vc2:
+        var_table = build_variance_table()
+        st.plotly_chart(variance_heatmap(var_table, through_month), use_container_width=True)
+
+    # Anomaly alerts
+    alerts = detect_anomalies(through_month)
+    if alerts:
+        st.subheader(f"Automated Variance Alerts ({len(alerts)})")
+        for alert in alerts:
+            sev_label = "CRITICAL" if alert.severity == "critical" else "WARNING"
+            with st.expander(
+                f"[{sev_label}] {alert.workstream} — {alert.month}: "
+                f"{alert.variance_pct:+.0f}% (${alert.variance_m:+.1f}M)",
+                expanded=(alert.severity == "critical"),
+            ):
+                st.markdown(f"**{alert.auto_commentary}**")
+                st.markdown(f"Budget: ${alert.budget_m:.1f}M | Actual: ${alert.actual_m:.1f}M | "
+                            f"Type: {alert.alert_type.replace('_', ' ').title()}")
+
+    # Workstream drill-down
+    st.divider()
+    st.subheader("Workstream Drill-Down")
+    selected_ws = st.selectbox("Select Workstream", VARIANCE_WORKSTREAMS)
+    trend = get_monthly_trend(selected_ws)
+
+    dc1, dc2 = st.columns(2)
+    with dc1:
+        st.plotly_chart(budget_vs_actual_trend(trend, selected_ws), use_container_width=True)
+    with dc2:
+        st.plotly_chart(cumulative_variance_chart(trend, selected_ws), use_container_width=True)
+
+    # YTD summary table
+    with st.expander("Full YTD Summary Table"):
+        st.dataframe(ytd, use_container_width=True, hide_index=True)
+
+    # AI variance commentary
+    if config.ANTHROPIC_API_KEY:
+        if st.button("Generate AI Variance Commentary", key="var_ai"):
+            with st.spinner("Agent generating variance report..."):
+                from agents.orchestrator import _call_agent
+                var_context = f"YTD Variance Summary (through {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][through_month-1]} 2026):\n\n"
+                var_context += ytd.to_string(index=False)
+                var_context += f"\n\nTotal Program Variance: ${total_var:+.1f}M ({total_var_pct:+.1f}%)"
+                var_context += "\n\nAlerts:\n"
+                for a in alerts[:8]:
+                    var_context += f"- {a.workstream} ({a.month}): {a.variance_pct:+.0f}% — {a.auto_commentary}\n"
+
+                variance_prompt = """You are a senior FP&A analyst writing the monthly variance commentary for Blue Origin's TeraWave program.
+Write a concise executive summary (3-4 paragraphs) covering:
+1. Overall program spend status vs. plan
+2. Top 2-3 workstreams requiring attention (with specific numbers)
+3. Reallocation recommendations — where can underspend offset overspend?
+4. Forward outlook — will the program land within full-year budget?
+Frame overspends through the 'accelerating progress' lens where justified."""
+
+                ai_commentary = _call_agent(variance_prompt, "Generate the monthly variance report.", var_context)
+                st.markdown("### AI-Generated Variance Commentary")
+                st.markdown(ai_commentary)
+
+# ── Tab 5: CapEx Workflow ────────────────────────────────────────────────────
+with tab_workflow:
+    st.markdown("""
+    ### Agentic Capital Expenditure Workflow
+    Submit a CapEx request and an **autonomous AI agent** evaluates it — choosing which
+    tools to call, chaining analyses, and producing a recommendation. Watch the agent
+    think in real-time.
+    """)
+
+    st.markdown(
+        '<div class="agentic-banner">'
+        '<strong>How this works:</strong> The agent receives your request and a set of tools '
+        '(budget checker, financial analyzer, document search, comparable finder, approval router, '
+        'variance checker). It autonomously decides which tools to call, interprets results, and '
+        'chains additional calls based on what it discovers. This is <strong>genuine agentic AI</strong> — '
+        'the reasoning path is not hardcoded.</div>',
+        unsafe_allow_html=True,
+    )
+
+    wf_col1, wf_col2 = st.columns([2, 1])
+
+    with wf_col1:
+        st.subheader("Submit New Request")
+        st.markdown("**Demo Day Narrative Path**")
+        selected_path = st.selectbox(
+            "Choose a focused walkthrough",
+            list(DEMO_NARRATIVE_PATHS.keys()),
             label_visibility="collapsed",
         )
-        st.divider()
-        st.markdown("**Recommended live path**")
-        st.markdown("1. Explain the finance bottleneck.")
-        st.markdown("2. Load the example CapEx request.")
-        st.markdown("3. Run the finance tool workflow.")
-        st.markdown("4. Show evidence, recommendation, memo.")
-        st.markdown("5. Close with evaluation and safeguards.")
-        st.divider()
-        st.caption("All records are synthetic demo data.")
-
-    if page == "Overview":
-        render_overview()
-    elif page == "CapEx Workflow":
-        render_workflow()
-    elif page == "Evaluation Evidence":
-        render_evaluation()
-    else:
-        render_implementation_notes()
-
-
-def hero(title: str, subtitle: str, pill: str = "Finance Workflow Prototype") -> None:
-    st.markdown(
-        f"""
-        <div class="hero">
-            <div class="pill">{pill}</div>
-            <h1>{title}</h1>
-            <p>{subtitle}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_overview() -> None:
-    hero(
-        APP_TITLE,
-        f"{APP_SUBTITLE}. The demo turns a capital request into an auditable recommendation, evidence pack, and executive memo.",
-    )
-    st.markdown(
-        """
-        <div class="disclaimer"><strong>Demo disclaimer:</strong> This prototype uses synthetic enterprise finance data.
-        It does not represent real company financials, supplier records, approval records, or internal documents.</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.subheader("Business Problem")
-    st.markdown(
-        """
-        Finance teams evaluating major CapEx requests have to pull evidence from ERP budget pools,
-        planning models, approval policies, historical requests, variance reports, and supporting documents.
-        The work is usually spread across spreadsheets, email, workflow tools, and shared drives.
-
-        **CapExFlow AI compresses that work into an auditable finance workflow**: intake the request,
-        gather evidence, evaluate financial merit, determine approval routing, and produce a memo a CFO
-        or investment committee can actually use.
-        """
-    )
-
-    st.markdown(
-        """
-        <div class="step-row">
-            <div class="step-card"><div class="step-num">Step 01</div><div class="step-title">CapEx request</div><div class="step-copy">Structured intake captures amount, pool, urgency, timeline, and rationale.</div></div>
-            <div class="step-card"><div class="step-num">Step 02</div><div class="step-title">Finance tool workflow</div><div class="step-copy">The workflow calls budget, valuation, document, precedent, variance, and routing tools.</div></div>
-            <div class="step-card"><div class="step-num">Step 03</div><div class="step-title">Evidence pack</div><div class="step-copy">Outputs become auditable facts with source IDs and citations.</div></div>
-            <div class="step-card"><div class="step-num">Step 04</div><div class="step-title">Recommendation</div><div class="step-copy">Approve, approve with conditions, defer, or reject.</div></div>
-            <div class="step-card"><div class="step-num">Step 05</div><div class="step-title">Executive memo</div><div class="step-copy">A short investment memo summarizes the ask, evidence, controls, and next step.</div></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.subheader("Example Case")
-    c1, c2 = st.columns([1.25, 1])
-    with c1:
-        st.markdown(
-            """
-            The workflow is industry-agnostic, but the example case uses a capital-intensive program:
-            **a critical-path launch acceleration request**.
-
-            This is a strong finance scenario because the right answer is not simply “cut cost.”
-            The finance question is whether the request creates enough schedule acceleration, risk reduction,
-            and progress per dollar to justify conditional approval.
-            """
-        )
-    with c2:
-        render_key_value_card(
-            "Scenario Snapshot",
-            [
-                ("Title", DEMO_DAY_SCENARIO["title"]),
-                ("Amount", money(DEMO_DAY_SCENARIO["amount_m"])),
-                ("Budget Pool", clean_dash(DEMO_DAY_SCENARIO["budget_pool"])),
-                ("Priority", DEMO_DAY_SCENARIO["priority_tag"]),
-                ("Urgency", DEMO_DAY_SCENARIO["urgency"]),
-                ("Completion", f"{DEMO_DAY_SCENARIO['completion_months']} months"),
-            ],
-        )
-
-
-def render_workflow() -> None:
-    hero(
-        "Capital Request Review",
-        "Submit a CapEx request, run the finance evidence workflow, and generate an investment-committee memo.",
-        "Main Workflow",
-    )
-    defaults = st.session_state.get("request_defaults", DEMO_DAY_SCENARIO.copy())
-
-    left, right = st.columns([1.08, 0.92], gap="large")
-    with left:
-        st.markdown("### 1. Submit CapEx Request")
-        if st.button("Load Example Request", type="secondary", use_container_width=True):
-            st.session_state["request_defaults"] = DEMO_DAY_SCENARIO.copy()
+        path_config = DEMO_NARRATIVE_PATHS[selected_path]
+        st.caption(path_config["why"])
+        if st.button("Load Selected Demo Path", use_container_width=True):
+            st.session_state["demo_request_defaults"] = path_config["request"]
             st.rerun()
-        request = render_request_form(defaults)
-    with right:
-        st.markdown("### What Finance Checks")
-        render_tool_catalog()
-        st.markdown("### Budget Pools")
-        render_budget_snapshot()
 
-    if request:
-        st.session_state["latest_request"] = request
-        st.markdown("### Agent Run Console")
-        tool_runs = run_tool_workflow(request, show_ui=True)
-        with st.status("Generating recommendation and investment memo...", expanded=True) as generation_status:
-            decision = make_decision(request, tool_runs)
-            st.write(f"Recommendation generated: **{decision['recommendation']}**")
-            st.write(f"Decision score: **{decision['score']}/100**")
-            memo = build_executive_memo(request, tool_runs, decision)
-            st.write("Investment committee memo generated from the evidence pack.")
-            generation_status.update(label="Recommendation and memo generated", state="complete", expanded=False)
-        st.session_state["latest_tool_runs"] = tool_runs
-        st.session_state["latest_decision"] = decision
-        st.session_state["latest_memo"] = memo
+        with st.expander("Recommended talk track", expanded=False):
+            for idx, step in enumerate(path_config["talk_track"], start=1):
+                st.markdown(f"**{idx}.** {step}")
 
-    if "latest_decision" in st.session_state:
+        demo_defaults = st.session_state.get("demo_request_defaults", {})
+        pool_options = list(BUDGET_POOLS.keys())
+        priority_options = PRIORITY_TAGS
+        urgency_options = URGENCY_LEVELS
+
+        with st.form("capex_form"):
+            req_title = st.text_input(
+                "Request Title",
+                value=demo_defaults.get("title", ""),
+                placeholder="e.g., Additional Optical Terminal Test Units",
+            )
+            req_desc = st.text_area(
+                "Description",
+                value=demo_defaults.get("description", ""),
+                placeholder="Brief description of what's being requested",
+                height=80,
+            )
+            fc1, fc2 = st.columns(2)
+            req_pool = fc1.selectbox(
+                "Budget Pool",
+                pool_options,
+                index=pool_options.index(demo_defaults.get("budget_pool", pool_options[0]))
+                if demo_defaults.get("budget_pool") in pool_options else 0,
+            )
+            req_amount = fc2.number_input(
+                "Amount ($M)",
+                min_value=0.1,
+                max_value=500.0,
+                value=float(demo_defaults.get("amount_m", 10.0)),
+                step=0.5,
+            )
+            fc3, fc4, fc5 = st.columns(3)
+            req_priority = fc3.selectbox(
+                "Priority",
+                priority_options,
+                index=priority_options.index(demo_defaults.get("priority_tag", priority_options[0]))
+                if demo_defaults.get("priority_tag") in priority_options else 0,
+            )
+            req_urgency = fc4.selectbox(
+                "Urgency",
+                urgency_options,
+                index=urgency_options.index(demo_defaults.get("urgency", urgency_options[0]))
+                if demo_defaults.get("urgency") in urgency_options else 0,
+            )
+            req_months = fc5.number_input(
+                "Completion (months)",
+                min_value=1,
+                max_value=60,
+                value=int(demo_defaults.get("completion_months", 12)),
+            )
+            req_justification = st.text_area(
+                "Justification — How does this accelerate progress or retire risk?",
+                value=demo_defaults.get("justification", ""),
+                placeholder="Explain why this investment is needed and what progress or risk retirement it enables...",
+                height=100,
+            )
+            req_requestor = st.text_input("Requestor", value="Demo User")
+            submitted = st.form_submit_button("Run Agentic Analysis", type="primary", use_container_width=True)
+
+    with wf_col2:
+        st.subheader("Budget Status")
+        budget_df = get_budget_summary()
+        for _, row in budget_df.iterrows():
+            pool_name = row["Budget Pool"].replace("TeraWave — ", "")
+            utilization = float(row["Utilization"].strip("%"))
+            status = "OK" if utilization < 70 else "Watch" if utilization < 90 else "At risk"
+            st.markdown(f"**{pool_name}** — ${row['Available ($M)']:,.0f}M avail ({row['Utilization']}) · {status}")
+
         st.divider()
-        render_results(
-            st.session_state["latest_request"],
-            st.session_state["latest_tool_runs"],
-            st.session_state["latest_decision"],
-            st.session_state["latest_memo"],
-        )
+        st.markdown("**Available Agent Tools:**")
+        tool_names = [
+            ("check_budget", "Budget pool status"),
+            ("search_documents", "RAG document search"),
+            ("get_comparable_requests", "Historical precedent"),
+            ("run_financial_impact", "NPV / ROI analysis"),
+            ("check_approval_routing", "Approval tier & SLA"),
+            ("get_variance_status", "YTD variance check"),
+        ]
+        for name, desc in tool_names:
+            st.markdown(f'<span class="tool-badge">{name}</span> {desc}', unsafe_allow_html=True)
 
+        with st.expander("Evaluation Evidence", expanded=False):
+            summary = evaluation_summary()
+            ev1, ev2 = st.columns(2)
+            ev1.metric("Ground Truth Pass Rate", summary["ground_truth_pass_rate"])
+            ev2.metric("Repeatability", f"{summary['recommendation_consistency_pct']:.0f}%")
+            st.caption(
+                f"Same request repeated 5 times: NPV range ${summary['npv_range_m']}M, "
+                f"ROI range {summary['roi_range_pct']} pts."
+            )
 
-def render_request_form(defaults: dict[str, Any]) -> dict[str, Any] | None:
-    pools = [row["name"] for row in load_data()["budget_pools"] if row["name"].startswith("TeraWave")]
-    with st.form("capex_request_form", border=True):
-        title = st.text_input("Request title", value=defaults.get("title", ""))
-        description = st.text_area("Description", value=defaults.get("description", ""), height=92)
-        c1, c2 = st.columns(2)
-        budget_pool = c1.selectbox(
-            "Budget pool",
-            pools,
-            index=index_or_zero(pools, defaults.get("budget_pool")),
-            format_func=clean_dash,
-        )
-        amount_m = c2.number_input("Amount ($M)", min_value=0.1, max_value=1000.0, value=float(defaults.get("amount_m", 45.0)), step=0.5)
-        c3, c4, c5 = st.columns(3)
-        priority_tag = c3.selectbox("Priority tag", PRIORITY_TAGS, index=index_or_zero(PRIORITY_TAGS, defaults.get("priority_tag")))
-        urgency = c4.selectbox("Urgency", URGENCY_LEVELS, index=index_or_zero(URGENCY_LEVELS, defaults.get("urgency")))
-        completion_months = c5.number_input("Completion timeline (months)", min_value=1, max_value=60, value=int(defaults.get("completion_months", 9)), step=1)
-        justification = st.text_area("Justification", value=defaults.get("justification", ""), height=118)
-        submitted = st.form_submit_button("Run Finance Agent", type="primary", use_container_width=True)
-    if not submitted:
-        return None
-    return {
-        "title": title,
-        "description": description,
-        "budget_pool": budget_pool,
-        "amount_m": float(amount_m),
-        "priority_tag": priority_tag,
-        "urgency": urgency,
-        "completion_months": int(completion_months),
-        "justification": justification,
-    }
+            st.markdown("**Ground-truth scenarios**")
+            st.dataframe(pd.DataFrame(run_ground_truth_evaluation()), use_container_width=True, hide_index=True)
 
+            st.markdown("**Repeatability check**")
+            repeatability = run_repeatability_check()
+            st.json(public_evidence_view(repeatability))
 
-def render_tool_catalog() -> None:
-    tools = [
-        ("check_budget", "ERP-style budget pool availability"),
-        ("run_financial_impact", "NPV, ROI, payback, progress, and risk scores"),
-        ("search_documents", "Policy, planning, risk, and business-case evidence"),
-        ("get_comparable_requests", "Historical capital request precedent"),
-        ("get_variance_status", "YTD budget vs. actual context"),
-        ("check_approval_routing", "Approval tier and SLA policy"),
-    ]
-    for name, desc in tools:
-        st.markdown(f'<span class="tool-chip">{name}</span> {desc}', unsafe_allow_html=True)
+    # Process agentic workflow
+    if submitted:
+        st.divider()
+        for stale_key in ["agent_result", "wf_result_fallback"]:
+            st.session_state.pop(stale_key, None)
 
+        request_payload = {
+            "title": req_title,
+            "description": req_desc,
+            "amount_m": req_amount,
+            "budget_pool": req_pool,
+            "priority_tag": req_priority,
+            "urgency": req_urgency,
+            "completion_months": req_months,
+            "justification": req_justification,
+            "requestor": req_requestor,
+        }
+        st.session_state["latest_request_payload"] = request_payload
 
-def render_budget_snapshot() -> None:
-    for row in load_data()["budget_pools"]:
-        if not row["name"].startswith("TeraWave"):
-            continue
-        available = row["budget_m"] - row["spent_m"] - row["committed_m"]
-        util = (row["spent_m"] + row["committed_m"]) / row["budget_m"]
-        st.markdown(f"**{row['name'].replace('TeraWave — ', '')}** - {money(available)} available ({util:.0%} utilized)")
+        if not config.ANTHROPIC_API_KEY:
+            st.warning(
+                "Set your `ANTHROPIC_API_KEY` to enable the agentic workflow. "
+                "Showing rule-based fallback instead."
+            )
+            # Fallback to rule-based workflow
+            request = CapExRequest(
+                id=f"CR-2026-{np.random.randint(100, 999)}",
+                title=req_title,
+                description=req_desc,
+                requestor=req_requestor,
+                department="TeraWave Program",
+                budget_pool=req_pool,
+                amount_m=req_amount,
+                priority_tag=req_priority,
+                urgency=req_urgency,
+                justification=req_justification,
+                expected_completion_months=req_months,
+                submission_date="2026-04-12",
+            )
+            result = run_capex_workflow(request)
+            st.session_state["wf_result_fallback"] = result
+        else:
+            # Run the REAL agentic workflow
+            steps_container = st.container()
+            agent_status = st.status("Agent analyzing request...", expanded=True)
 
-
-def run_tool_workflow(request: dict[str, Any], show_ui: bool = False) -> list[dict[str, Any]]:
-    query = (
-        f"{request['title']} {request['priority_tag']} launch manifest capital allocation policy "
-        "speed over savings acceleration schedule risk initial operational capability"
-    )
-    plan = [
-        ("check_budget", "Budget Availability", "Confirm whether the request fits inside the selected budget pool.", {"budget_pool": request["budget_pool"]}),
-        ("run_financial_impact", "Financial Impact", "Estimate NPV, ROI, payback, progress contribution, and risk retirement.", {"amount_m": request["amount_m"], "priority_tag": request["priority_tag"], "completion_months": request["completion_months"], "title": request["title"]}),
-        ("search_documents", "Document Evidence", "Retrieve policy, planning, and business-case evidence relevant to the request.", {"query": query}),
-        ("get_comparable_requests", "Precedent Review", "Find similar historical requests and outcomes.", {"budget_pool": request["budget_pool"], "priority_tag": request["priority_tag"], "amount_m": request["amount_m"]}),
-        ("get_variance_status", "Variance Context", "Check whether the workstream has current budget-vs-actual pressure.", {"workstream": budget_pool_to_workstream(request["budget_pool"])}),
-        ("check_approval_routing", "Approval Routing", "Determine approval tier and SLA from policy.", {"amount_m": request["amount_m"], "urgency": request["urgency"]}),
-    ]
-    runs = []
-    status_context = st.status("Calling finance tools...", expanded=True) if show_ui else None
-    if status_context:
-        status_context.__enter__()
-    try:
-        for idx, (name, label, rationale, inputs) in enumerate(plan, start=1):
-            if show_ui:
-                st.markdown(f"**Tool {idx}: {label}**")
-                st.caption(rationale)
-                st.markdown(f'<span class="tool-chip">{name}</span>', unsafe_allow_html=True)
-                st.json({"input": inputs})
-                time.sleep(0.15)
-            output = execute_demo_tool(name, inputs)
-            run = {"name": name, "label": label, "rationale": rationale, "input": inputs, "output": output}
-            runs.append(run)
-            if show_ui:
-                st.json({"output": summarize_tool_output(name, output)})
+            with agent_status:
+                st.markdown(f"**Request:** {req_title} — ${req_amount}M")
+                st.markdown(f"**Pool:** {req_pool} | **Priority:** {req_priority} | **Urgency:** {req_urgency}")
                 st.divider()
-        if status_context:
-            status_context.update(label=f"Finance tool run complete - {len(runs)} tools called", state="complete", expanded=False)
-    finally:
-        if status_context:
-            status_context.__exit__(None, None, None)
-    return runs
 
+                step_placeholders = []
 
-def execute_demo_tool(name: str, inputs: dict[str, Any]) -> dict[str, Any]:
-    if name == "check_budget":
-        return tool_check_budget(inputs["budget_pool"])
-    if name == "run_financial_impact":
-        return tool_financial_impact(inputs)
-    if name == "search_documents":
-        return tool_search_documents(inputs["query"])
-    if name == "get_comparable_requests":
-        return tool_comparables(inputs)
-    if name == "get_variance_status":
-        return VARIANCE_STATUS.get(inputs["workstream"], VARIANCE_STATUS["Launch Services"])
-    if name == "check_approval_routing":
-        return tool_approval_routing(inputs["amount_m"], inputs.get("urgency", "Standard"))
-    return {"error": f"Unknown tool: {name}"}
+                def on_agent_step(step: AgentStep):
+                    """Real-time callback to display each agent step."""
+                    if step.step_type == "thinking":
+                        # Show agent reasoning
+                        st.markdown(f"**Agent Reasoning**")
+                        # Only show first 500 chars of intermediate reasoning
+                        preview = step.content[:500] + ("..." if len(step.content) > 500 else "")
+                        st.markdown(preview)
+                        st.divider()
 
+                    elif step.step_type == "tool_call":
+                        st.markdown(
+                            f'**Tool Call:** <span class="tool-badge">{step.tool_name}</span>',
+                            unsafe_allow_html=True,
+                        )
+                        st.code(step.content, language="json")
 
-def summarize_tool_output(name: str, output: dict[str, Any]) -> dict[str, Any]:
-    if name == "check_budget":
-        return {
-            "pool": clean_dash(output.get("budget_pool", "N/A")),
-            "available": money(output.get("available_m", 0)),
-            "utilization": f"{output.get('utilization_pct', 'N/A')}%",
-            "status": output.get("status", "N/A"),
-        }
-    if name == "run_financial_impact":
-        return {
-            "npv_impact": money(output.get("npv_impact_m", 0)),
-            "roi": f"{output.get('roi_pct', 0):.1f}%",
-            "payback": f"{output.get('payback_months', 'N/A')} months",
-            "assessment": output.get("assessment", "N/A"),
-        }
-    if name == "search_documents":
-        documents = output.get("documents", [])
-        return {
-            "documents_found": output.get("results_found", 0),
-            "top_citation": documents[0]["doc_id"] if documents else "N/A",
-            "top_document": documents[0]["title"] if documents else "N/A",
-        }
-    if name == "get_comparable_requests":
-        requests = output.get("requests", [])
-        return {
-            "comparables_found": output.get("comparables_found", 0),
-            "top_precedent": requests[0]["id"] if requests else "N/A",
-            "top_outcome": requests[0]["outcome"] if requests else "N/A",
-        }
-    if name == "get_variance_status":
-        return {
-            "workstream": output.get("workstream", "N/A"),
-            "status": output.get("status", "N/A"),
-            "ytd_variance": f"{output.get('ytd_variance_pct', 0):+.1f}%",
-        }
-    if name == "check_approval_routing":
-        return {
-            "tier": f"T{output.get('tier', 'N/A')}",
-            "approver": output.get("approver", "N/A"),
-            "sla": f"{output.get('sla_days', 'N/A')} business days",
-        }
-    return output
+                    elif step.step_type == "tool_result":
+                        with st.expander(f"Result from {step.tool_name}", expanded=False):
+                            try:
+                                parsed = json.loads(step.content)
+                                st.json(public_evidence_view(parsed))
+                            except Exception:
+                                st.text(step.content)
+                        st.divider()
 
+                agent_result = run_capex_analysis(
+                    title=req_title,
+                    description=req_desc,
+                    amount_m=req_amount,
+                    budget_pool=req_pool,
+                    priority_tag=req_priority,
+                    urgency=req_urgency,
+                    justification=req_justification,
+                    completion_months=req_months,
+                    requestor=req_requestor,
+                    on_step=on_agent_step,
+                )
 
-def tool_check_budget(pool_name: str) -> dict[str, Any]:
-    for row in load_data()["budget_pools"]:
-        if row["name"] == pool_name:
-            available = row["budget_m"] - row["spent_m"] - row["committed_m"]
-            util = (row["spent_m"] + row["committed_m"]) / row["budget_m"] * 100
-            return {
-                "budget_pool": row["name"],
-                "total_budget_m": row["budget_m"],
-                "spent_m": row["spent_m"],
-                "committed_m": row["committed_m"],
-                "available_m": available,
-                "utilization_pct": round(util, 1),
-                "status": "healthy" if util < 70 else "caution" if util < 90 else "critical",
-                "source_record_id": row["id"],
-                "source_system": row.get("system", "Synthetic ERP"),
-            }
-    return {"error": f"Budget pool not found: {pool_name}"}
+                # Update status
+                if agent_result.error:
+                    agent_status.update(label="Agent encountered an error", state="error")
+                else:
+                    agent_status.update(
+                        label=f"Analysis complete — {agent_result.total_tool_calls} tool calls in {agent_result.total_duration_ms / 1000:.1f}s",
+                        state="complete",
+                    )
 
+            st.session_state["agent_result"] = agent_result
 
-def tool_financial_impact(inputs: dict[str, Any]) -> dict[str, Any]:
-    amount = float(inputs.get("amount_m", 0))
-    priority = inputs.get("priority_tag", "Maintenance")
-    months = int(inputs.get("completion_months", 12))
-    multipliers = {"Critical Path": 3.5, "Risk Retirement": 4.0, "Cost Reduction": 2.5, "Capacity Expansion": 2.0, "R&D / Innovation": 3.0, "Maintenance": 1.2}
-    progress_map = {"Critical Path": 0.9, "Capacity Expansion": 0.7, "R&D / Innovation": 0.6, "Cost Reduction": 0.4, "Risk Retirement": 0.5, "Maintenance": 0.2}
-    risk_map = {"Risk Retirement": 0.9, "Critical Path": 0.6, "R&D / Innovation": 0.7, "Cost Reduction": 0.3, "Capacity Expansion": 0.4, "Maintenance": 0.1}
-    adjustment = stable_adjustment(str(inputs.get("title", priority)))
-    npv = round(amount * multipliers.get(priority, 1.5) * adjustment, 1)
-    roi = round((npv / amount - 1) * 100, 1) if amount else 0
-    payback = max(3, min(60, int(months * (amount / max(npv, 0.01)) * 12)))
-    return {
-        "amount_m": amount,
-        "npv_impact_m": npv,
-        "roi_pct": roi,
-        "payback_months": payback,
-        "progress_score": progress_map.get(priority, 0.5),
-        "risk_retirement_score": risk_map.get(priority, 0.3),
-        "assessment": "strong" if roi > 100 else "moderate" if roi > 30 else "marginal",
-        "source_record_id": "SYNTH-FINANCIAL-IMPACT-MODEL",
-    }
+    # Display agentic result
+    if "agent_result" in st.session_state:
+        agent_result = st.session_state["agent_result"]
 
+        if not agent_result.error:
+            # Metrics bar
+            ar1, ar2, ar3 = st.columns(3)
+            ar1.metric("Tool Calls", agent_result.total_tool_calls)
+            ar2.metric("Reasoning Rounds", sum(1 for s in agent_result.steps if s.step_type == "thinking"))
+            ar3.metric("Total Time", f"{agent_result.total_duration_ms / 1000:.1f}s")
 
-def tool_search_documents(query: str, top_k: int = 3) -> dict[str, Any]:
-    q_tokens = tokenize(query)
-    scored = []
-    for doc in load_data()["documents"]:
-        text = f"{doc['title']} {doc['content']}"
-        tokens = tokenize(text)
-        if not tokens:
-            continue
-        overlap = len(q_tokens.intersection(tokens))
-        score = overlap / max(8, len(q_tokens))
-        if score > 0:
-            scored.append((score, doc))
-    scored.sort(key=lambda item: item[0], reverse=True)
-    docs = []
-    for score, doc in scored[:top_k]:
-        docs.append(
-            {
-                "title": doc["title"],
-                "doc_id": doc["id"],
-                "type": doc["doc_type"],
-                "date": doc["date"],
-                "relevance": round(min(0.99, score), 2),
-                "excerpt": doc["content"][:1100],
-                "source_record_id": doc["id"],
-            }
-        )
-    return {"query": query, "results_found": len(docs), "documents": docs}
+            # Final recommendation
+            st.subheader("Agent Recommendation")
+            st.markdown(agent_result.final_answer)
 
+            agent_evidence = extract_agent_evidence(agent_result)
+            agent_memo = build_agent_memo(
+                st.session_state.get("latest_request_payload", {}),
+                agent_evidence,
+            )
+            with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
+                st.markdown("#### Evidence Pack")
+                st.json(public_evidence_view(agent_evidence))
+                st.markdown("#### 1-2 Page Memo Draft")
+                st.markdown(agent_memo)
+                st.download_button(
+                    "Download memo (.md)",
+                    data=agent_memo,
+                    file_name="terawave_investment_memo.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
 
-def tool_comparables(inputs: dict[str, Any]) -> dict[str, Any]:
-    pool = inputs.get("budget_pool", "")
-    priority = inputs.get("priority_tag", "")
-    amount = float(inputs.get("amount_m", 0) or 0)
-    matches = []
-    for req in load_data()["historical_requests"]:
-        score = 0
-        if req["budget_pool"] == pool:
-            score += 3
-        if req["priority_tag"] == priority:
-            score += 2
-        if amount and abs(req["amount_m"] - amount) / amount < 0.5:
-            score += 2
-        if score >= 2:
-            row = dict(req)
-            row["relevance_score"] = score
-            row["source_record_id"] = req["id"]
-            matches.append(row)
-    matches.sort(key=lambda item: item["relevance_score"], reverse=True)
-    return {"comparables_found": len(matches[:5]), "requests": matches[:5]}
+            # Full reasoning chain (collapsed)
+            with st.expander("Full Agent Reasoning Chain", expanded=False):
+                for step in agent_result.steps:
+                    if step.step_type == "tool_call":
+                        st.markdown(f'**{step.title}**')
+                        st.code(step.content, language="json")
+                    elif step.step_type == "tool_result":
+                        st.markdown(f'**{step.title}**')
+                        try:
+                            st.json(public_evidence_view(json.loads(step.content)))
+                        except Exception:
+                            st.text(step.content[:500])
+                    elif step.step_type == "thinking":
+                        st.markdown(f'**{step.title}**')
+                        st.markdown(step.content[:300] + ("..." if len(step.content) > 300 else ""))
+                    st.divider()
+        else:
+            st.error(f"Agent error: {agent_result.error}")
 
+    # Fallback rule-based result display
+    if "wf_result_fallback" in st.session_state:
+        result = st.session_state["wf_result_fallback"]
+        st.divider()
 
-def tool_approval_routing(amount: float, urgency: str) -> dict[str, Any]:
-    for tier in load_data()["approval_tiers"]:
-        if amount <= tier["max_amount_m"]:
-            sla = tier["sla_days"]
-            if urgency == "Emergency":
-                sla = max(1, sla // 2)
-            elif urgency == "Expedited":
-                sla = max(2, int(sla * 0.7))
-            return {"tier": tier["tier"], "approver": tier["label"], "sla_days": sla, "urgency": urgency, "amount_m": amount, "source_record_id": tier["source_record_id"]}
-    return {"error": "Amount exceeds approval tiers"}
+        rec = result.recommendation
+        st.subheader(f"Recommendation: {rec}")
+        st.markdown(f"*{result.recommendation_rationale}*")
 
+        if result.conditions:
+            st.markdown("**Conditions:**")
+            for cond in result.conditions:
+                st.markdown(f"- {cond}")
 
-def make_decision(request: dict[str, Any], runs: list[dict[str, Any]]) -> dict[str, Any]:
-    evidence = by_tool(runs)
-    budget = evidence["check_budget"]
-    financial = evidence["run_financial_impact"]
-    routing = evidence["check_approval_routing"]
-    variance = evidence["get_variance_status"]
-    amount = request["amount_m"]
-    available = float(budget.get("available_m", 0) or 0)
-    roi = float(financial.get("roi_pct", 0) or 0)
-    progress = float(financial.get("progress_score", 0) or 0)
-    risk = float(financial.get("risk_retirement_score", 0) or 0)
-    tier = int(routing.get("tier", 0) or 0)
-    variance_pct = abs(float(variance.get("ytd_variance_pct", 0) or 0))
+        wr1, wr2, wr3, wr4, wr5 = st.columns(5)
+        wr1.metric("NPV Impact", f"${result.npv_impact_m:,.1f}M")
+        wr2.metric("ROI", f"{result.roi_pct:.0f}%")
+        wr3.metric("Payback", f"{result.payback_months} mo")
+        wr4.metric("Approval Tier", f"T{result.approval_tier}: {result.approval_tier_label}")
+        wr5.metric("SLA", f"{result.sla_days} days")
 
-    score = 0
-    score += 30 if available >= amount else -30
-    score += 25 if roi >= 100 else 16 if roi >= 50 else 6 if roi > 0 else -10
-    score += 20 if request["priority_tag"] in {"Critical Path", "Risk Retirement"} else 8
-    score += round((progress + risk) * 10)
-    score += 8 if variance_pct <= 5 else -5
-    score -= 4 if tier >= 3 else 0
-    score = int(max(0, min(100, score)))
+        st.subheader("Workflow Audit Trail")
+        for step in result.workflow_steps:
+            with st.expander(f"{step['step']} — {step['status']}"):
+                st.markdown(step["details"])
 
-    conditions = []
-    risk_flags = []
-    if available < amount:
-        risk_flags.append("Requested amount exceeds available budget headroom.")
-    if tier >= 3:
-        conditions.append("Route to CFO approval before supplier or internal commitments are made.")
-    if request["urgency"] in {"Expedited", "Emergency"}:
-        conditions.append("Use milestone release: staffing kickoff, pad-readiness completion, and readiness-review pull-forward evidence.")
-    if amount >= 25:
-        conditions.append("Require monthly finance check-ins until the 9-month completion window is retired.")
-    if variance_pct > 5:
-        conditions.append("Confirm variance recovery plan or reallocation source before final release.")
-    if roi < 30:
-        risk_flags.append("Financial impact is below the normal threshold for strategic acceleration funding.")
+        workflow_evidence = extract_workflow_evidence(result)
+        workflow_memo = build_workflow_memo(workflow_evidence)
+        with st.expander("Evidence Pack & Concise Investment Memo", expanded=True):
+            st.markdown("#### Evidence Pack")
+            st.json(public_evidence_view(workflow_evidence))
+            st.markdown("#### 1-2 Page Memo Draft")
+            st.markdown(workflow_memo)
+            st.download_button(
+                "Download memo (.md)",
+                data=workflow_memo,
+                file_name="terawave_investment_memo.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
 
-    if available < amount * 0.9 or roi < 0:
-        recommendation = "Reject"
-        rationale = "The request does not clear minimum budget or financial merit thresholds."
-    elif score < 45:
-        recommendation = "Defer"
-        rationale = "The request needs stronger financial evidence or budget mitigation before approval."
-    elif conditions:
-        recommendation = "Approve with Conditions"
-        rationale = "The request has strong strategic and financial merit, but the dollar size, expedited timing, and CFO routing require explicit controls."
-    else:
-        recommendation = "Approve"
-        rationale = "The request fits budget, clears financial thresholds, and aligns with program priorities."
-    return {"recommendation": recommendation, "rationale": rationale, "score": score, "conditions": conditions, "risk_flags": risk_flags}
+    # Historical requests table
+    with st.expander("Historical CapEx Requests"):
+        historical_df = get_historical_df()
+        hidden_cols = [col for col in ["source_system", "source_file", "dataset_id", "synthetic"] if col in historical_df.columns]
+        st.dataframe(historical_df.drop(columns=hidden_cols), use_container_width=True, hide_index=True)
 
+# ── Tab 7: Document Intelligence ─────────────────────────────────────────────
+with tab_docs:
+    st.markdown("""
+    ### Document Intelligence (RAG)
+    Search and query across TeraWave program documents — contracts, vendor memos,
+    policy docs, technical reports, and pipeline reviews. AI answers are grounded
+    in source documents with citations.
+    """)
 
-def render_results(request: dict[str, Any], runs: list[dict[str, Any]], decision: dict[str, Any], memo: str) -> None:
-    evidence = by_tool(runs)
-    budget = evidence["check_budget"]
-    financial = evidence["run_financial_impact"]
-    routing = evidence["check_approval_routing"]
-    docs = evidence["search_documents"].get("documents", [])
-    comps = evidence["get_comparable_requests"].get("requests", [])
-    variance = evidence["get_variance_status"]
+    # Document library
+    all_docs = get_all_documents()
+    doc_col1, doc_col2 = st.columns([1, 2])
 
-    st.markdown("### 2. Tool-Calling Audit Trail")
-    render_tool_timeline(runs)
+    with doc_col1:
+        st.subheader("Document Library")
+        for doc in all_docs:
+            type_label = f"[{doc.doc_type.upper()}]"
+            with st.expander(f"{type_label} {doc.title[:50]}..."):
+                source_label = doc.source.replace("Synthetic ", "")
+                st.markdown(f"**Type:** {doc.doc_type.title()} | **Source:** {source_label} | **Date:** {doc.date}")
+                if doc.metadata:
+                    metadata = public_evidence_view(doc.metadata)
+                    meta_str = " | ".join(f"{k}: {v}" for k, v in metadata.items())
+                    st.markdown(f"**Metadata:** {meta_str}")
+                st.markdown(f"*{len(doc.content)} characters*")
 
-    st.markdown("### 3. Generated Analyst Readout")
-    st.markdown(build_analyst_readout(request, runs, decision))
+    with doc_col2:
+        st.subheader("Query Documents")
 
-    st.markdown("### 4. Recommendation")
+        # Suggested searches
+        if "doc_query" not in st.session_state:
+            st.markdown("**Try these queries:**")
+            doc_suggestions = [
+                "What are the SLA requirements in the DataLink ground services contract?",
+                "Which vendor was selected for the MEO satellite bus and why?",
+                "What is the capital allocation policy for emergency requests?",
+                "What are the key risks for the optical inter-satellite link system?",
+                "What is the enterprise customer pipeline value and which segments are largest?",
+                "How many launches are needed for the full constellation?",
+            ]
+            dcols = st.columns(2)
+            for i, sug in enumerate(doc_suggestions):
+                if dcols[i % 2].button(sug, key=f"doc_sug_{i}", use_container_width=True):
+                    st.session_state["doc_query"] = sug
+                    st.rerun()
+
+        query = st.text_input("Search documents...", value=st.session_state.get("doc_query", ""),
+                              placeholder="Ask anything about TeraWave program documents...")
+
+        if query:
+            # Retrieve relevant documents
+            results = search_documents(query, top_k=3)
+
+            if results:
+                st.markdown(f"**Found {len(results)} relevant document(s)**")
+
+                # Show retrieved chunks with relevance scores
+                for doc, score in results:
+                    type_label = f"[{doc.doc_type.upper()}]"
+                    with st.expander(f"{type_label} {doc.title} — Relevance: {score:.0%}", expanded=(score > 0.2)):
+                        source_label = doc.source.replace("Synthetic ", "")
+                        st.markdown(f"**{doc.doc_type.title()}** | {source_label} | {doc.date}")
+                        # Show content preview (first 1000 chars)
+                        preview = doc.content[:1500] + ("..." if len(doc.content) > 1500 else "")
+                        st.text(preview)
+
+                # AI-powered Q&A
+                st.divider()
+                if config.ANTHROPIC_API_KEY:
+                    with st.spinner("AI analyzing documents..."):
+                        from agents.orchestrator import query_document_qa
+                        doc_context = format_context_for_llm(results)
+                        answer = query_document_qa(query, doc_context)
+                        st.markdown("### AI Answer (Grounded in Documents)")
+                        st.markdown(answer)
+                else:
+                    st.info("Set `ANTHROPIC_API_KEY` to enable AI-powered document Q&A. "
+                            "The retrieval system above works without the API key.")
+            else:
+                st.warning("No relevant documents found. Try a different query.")
+
+# ── Tab 8: AI Agent Console ──────────────────────────────────────────────────
+with tab_agent:
+    st.markdown("""
+    ### Agentic AI Console
+    Ask questions and an **autonomous agent** decides which tools to use, gathers data,
+    and chains reasoning to answer. Watch the agent's tool calls and reasoning in real-time.
+    """)
+
     st.markdown(
-        f"""
-        <div class="recommendation"><div class="rec-label">Recommendation</div><h2>{decision['recommendation']}</h2><div class="muted">{decision['rationale']}</div></div>
-        """,
+        '<div class="agentic-banner">'
+        '<strong>Agentic Architecture:</strong> Unlike a chatbot, this agent has <strong>tools</strong> '
+        'it can call autonomously. It plans what data it needs, calls tools (budget checker, document search, '
+        'financial analyzer, etc.), interprets results, and chains follow-up calls based on what it discovers. '
+        'The reasoning path is <strong>not hardcoded</strong> — it varies per query.</div>',
         unsafe_allow_html=True,
     )
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("Decision Score", f"{decision['score']}/100")
-    k2.metric("Budget Headroom", money(budget.get("available_m", 0)))
-    k3.metric("NPV Impact", money(financial.get("npv_impact_m", 0)))
-    k4.metric("ROI", f"{financial.get('roi_pct', 0):,.0f}%")
-    k5.metric("Approval", f"T{routing.get('tier')}: {routing.get('approver')}")
 
-    if decision["conditions"]:
-        st.markdown("**Approval conditions**")
-        for condition in decision["conditions"]:
-            st.markdown(f"- {condition}")
+    # Build model data context for agents
+    model_data = {
+        "projection": projection,
+        "metrics": metrics,
+        "progress_metrics": progress_df,
+        "tornado": tornado_df if 'tornado_df' in dir() else tornado_analysis(assumptions),
+    }
+    if "mc_results" in st.session_state:
+        model_data["mc_summary"] = st.session_state["mc_results"].summary
 
-    st.markdown("### 5. Finance Evidence Pack")
-    cols = st.columns(3)
-    with cols[0]:
-        render_evidence_card("Budget", [f"Pool: {clean_dash(budget.get('budget_pool', 'N/A'))}", f"Total: {money(budget.get('total_budget_m', 0))}", f"Available: {money(budget.get('available_m', 0))}", f"Utilization: {budget.get('utilization_pct', 'N/A')}%"], budget.get("source_record_id", "budget source"))
-    with cols[1]:
-        render_evidence_card("Financial", [f"NPV impact: {money(financial.get('npv_impact_m', 0))}", f"Payback: {financial.get('payback_months', 'N/A')} months", f"Progress score: {financial.get('progress_score', 'N/A')}", f"Risk-retirement score: {financial.get('risk_retirement_score', 'N/A')}"], financial.get("source_record_id", "financial model"))
-    with cols[2]:
-        render_evidence_card("Approval Policy", [f"Tier: {routing.get('tier', 'N/A')}", f"Approver: {routing.get('approver', 'N/A')}", f"SLA: {routing.get('sla_days', 'N/A')} business days", f"Urgency: {routing.get('urgency', request['urgency'])}"], routing.get("source_record_id", "approval policy"))
+    # Agent mode toggle
+    agent_mode = st.radio(
+        "Agent Mode",
+        ["Agentic (Tool Use)", "Direct (No Tools)"],
+        horizontal=True,
+        help="Agentic mode lets the agent autonomously call tools. Direct mode is a simple chat.",
+    )
+    use_agentic = agent_mode.startswith("Agentic")
 
-    d1, d2 = st.columns([1, 1], gap="large")
-    with d1:
-        st.markdown("#### Source Documents")
-        for doc in docs[:3]:
-            with st.expander(f"{doc.get('title')} [{doc.get('doc_id')}]"):
-                st.caption(f"{doc.get('type', 'document').title()} | relevance {doc.get('relevance', 0):.0%}")
-                st.write(doc.get("excerpt", "")[:900] + ("..." if len(doc.get("excerpt", "")) > 900 else ""))
-        st.markdown("#### Historical Capital Requests")
-        for item in comps[:4]:
-            st.markdown(f"- **{item.get('id')}**: {item.get('title')} - {money(item.get('amount_m', 0))}, {item.get('status')}; {item.get('outcome')}")
-    with d2:
-        st.markdown("#### Scorecard")
-        render_scorecard(financial, budget, variance, decision)
-        st.markdown("#### Variance Context")
-        render_key_value_card("Current Workstream", [("Workstream", variance.get("workstream", "N/A")), ("YTD Budget", money(variance.get("ytd_budget_m", 0))), ("YTD Actual", money(variance.get("ytd_actual_m", 0))), ("YTD Variance", f"{money(variance.get('ytd_variance_m', 0))} ({variance.get('ytd_variance_pct', 0):+.1f}%)"), ("Status", variance.get("status", "N/A"))])
+    # Chat interface
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-    with st.expander("Full Tool Trace", expanded=True):
-        for run in runs:
-            st.markdown(f"**{run['label']}**")
-            st.caption(run["rationale"])
-            st.markdown(f'<span class="tool-chip">{run["name"]}</span>', unsafe_allow_html=True)
-            st.json({"input": run["input"], "output": run["output"]})
-            st.divider()
+    # Display chat history
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            if "agent" in msg:
+                st.markdown(f'<span class="agent-badge">{msg["agent"]}</span>',
+                            unsafe_allow_html=True)
+            if "tool_calls" in msg and msg["tool_calls"] > 0:
+                st.caption(f"{msg['tool_calls']} tool calls | {msg.get('duration', 'N/A')}")
+            st.markdown(msg["content"])
 
-    st.markdown("### 6. Investment Committee Memo")
-    st.markdown(memo)
-    st.download_button("Download memo (.md)", data=memo, file_name="terawave_capval_investment_memo.md", mime="text/markdown", use_container_width=True)
-
-
-def render_tool_timeline(runs: list[dict[str, Any]]) -> None:
-    cols = st.columns(3)
-    for idx, run in enumerate(runs):
-        output = summarize_tool_output(run["name"], run["output"])
-        with cols[idx % 3]:
-            facts = [f"{key}: {value}" for key, value in output.items()]
-            render_evidence_card(run["label"], facts[:4], run["name"])
-
-
-def build_analyst_readout(request: dict[str, Any], runs: list[dict[str, Any]], decision: dict[str, Any]) -> str:
-    evidence = by_tool(runs)
-    budget = evidence["check_budget"]
-    financial = evidence["run_financial_impact"]
-    routing = evidence["check_approval_routing"]
-    documents = evidence["search_documents"].get("documents", [])
-    comparables = evidence["get_comparable_requests"].get("requests", [])
-    variance = evidence["get_variance_status"]
-
-    doc_titles = "; ".join(doc["title"] for doc in documents[:2]) or "No documents retrieved"
-    comp_labels = "; ".join(f"{item['id']} ({item['status']})" for item in comparables[:2]) or "No close precedents"
-    conditions = "; ".join(decision["conditions"]) if decision["conditions"] else "No added conditions required"
-
-    return "\n".join(
-        [
-            "The finance agent generated this readout from the tool outputs:",
-            "",
-            f"- **Budget position:** {clean_dash(budget.get('budget_pool'))} has {money(budget.get('available_m', 0))} available, so the {money(request['amount_m'])} request fits within current headroom.",
-            f"- **Financial merit:** The impact model estimates {money(financial.get('npv_impact_m', 0))} of NPV impact, {financial.get('roi_pct', 0):.1f}% ROI, and a {financial.get('payback_months')} month payback.",
-            f"- **Policy and routing:** Approval routes to Tier {routing.get('tier')} ({routing.get('approver')}) with a {routing.get('sla_days')}-business-day SLA.",
-            f"- **Document evidence:** Retrieval found {doc_titles}.",
-            f"- **Precedent evidence:** Comparable historical requests include {comp_labels}.",
-            f"- **Variance context:** {variance.get('workstream')} is currently {variance.get('status')} with {variance.get('ytd_variance_pct', 0):+.1f}% YTD variance.",
-            f"- **Generated control recommendation:** {conditions}.",
+    # Suggested prompts
+    if not st.session_state.messages:
+        st.markdown("**Suggested queries:**")
+        row1 = st.columns(2)
+        row2 = st.columns(2)
+        suggestions = [
+            "What's the budget status for Ground Segment & Gateways, and are there any variance concerns?",
+            "Which workstreams should we accelerate investment in based on progress-per-dollar?",
+            "Search for the DataLink ground services contract and summarize the key SLA terms.",
+            "What approval tier would a $25M Critical Path request route to?",
         ]
-    )
+        for i, sug in enumerate(suggestions):
+            row = row1 if i < 2 else row2
+            if row[i % 2].button(sug, key=f"sug_{i}", use_container_width=True):
+                st.session_state["pending_query"] = sug
+                st.rerun()
 
+    # Process pending suggestion
+    if "pending_query" in st.session_state:
+        prompt = st.session_state.pop("pending_query")
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-def render_scorecard(financial: dict[str, Any], budget: dict[str, Any], variance: dict[str, Any], decision: dict[str, Any]) -> None:
-    budget_fit = 100 if budget.get("status") in {"healthy", "caution"} else 35
-    roi = float(financial.get("roi_pct", 0) or 0)
-    financial_merit = min(100, max(0, roi / 2))
-    progress = float(financial.get("progress_score", 0) or 0) * 100
-    risk = float(financial.get("risk_retirement_score", 0) or 0) * 100
-    variance_health = max(0, 100 - abs(float(variance.get("ytd_variance_pct", 0) or 0)) * 6)
-    rows = [("Budget Fit", budget_fit), ("Financial Merit", financial_merit), ("Progress", progress), ("Risk Retirement", risk), ("Variance Health", variance_health), ("Overall", decision["score"])]
-    for label, value in rows:
-        st.caption(f"{label}: {int(value)}/100")
-        st.progress(int(value))
+    # Chat input
+    if prompt := st.chat_input("Ask about TeraWave — the agent will gather data autonomously..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
+    # Process latest user message
+    if (st.session_state.messages
+            and st.session_state.messages[-1]["role"] == "user"
+            and (len(st.session_state.messages) < 2
+                 or st.session_state.messages[-2].get("role") != "assistant")):
+        user_msg = st.session_state.messages[-1]["content"]
 
-def build_executive_memo(request: dict[str, Any], runs: list[dict[str, Any]], decision: dict[str, Any]) -> str:
-    evidence = by_tool(runs)
-    budget = evidence["check_budget"]
-    financial = evidence["run_financial_impact"]
-    routing = evidence["check_approval_routing"]
-    docs = evidence["search_documents"].get("documents", [])
-    comps = evidence["get_comparable_requests"].get("requests", [])
-    variance = evidence["get_variance_status"]
-    doc_cites = ", ".join(doc.get("doc_id", "DOC") for doc in docs[:3]) or "no document citations"
-    comp_cites = ", ".join(item.get("id", "CR") for item in comps[:3]) or "no comparable records"
-    conditions = decision["conditions"] or ["No additional conditions required."]
-    risk_flags = decision["risk_flags"] or ["No blocking risk flags identified."]
-    return "\n".join([
-        f"# Executive Investment Memo: {request['title']}",
-        "",
-        f"**Date:** {date.today().isoformat()}",
-        "**Prepared by:** CapExFlow AI",
-        "**Decision status:** Decision support only; synthetic demo data.",
-        "",
-        "## Recommendation",
-        "",
-        f"**{decision['recommendation']}** - {decision['rationale']}",
-        "",
-        "## Request Summary",
-        "",
-        f"- Amount: {money(request['amount_m'])}",
-        f"- Budget pool: {clean_dash(request['budget_pool'])}",
-        f"- Priority / urgency: {request['priority_tag']} / {request['urgency']}",
-        f"- Completion timeline: {request['completion_months']} months",
-        f"- Justification: {request['justification']}",
-        "",
-        "## Evidence Cited",
-        "",
-        f"- Budget: {clean_dash(budget.get('budget_pool'))} has {money(budget.get('available_m', 0))} available against a {money(budget.get('total_budget_m', 0))} pool [{budget.get('source_record_id')}].",
-        f"- Financial impact: estimated NPV impact is {money(financial.get('npv_impact_m', 0))}, ROI is {financial.get('roi_pct', 0):,.1f}%, and payback is {financial.get('payback_months')} months [{financial.get('source_record_id')}].",
-        f"- Approval policy: the request routes to Tier {routing.get('tier')} ({routing.get('approver')}) with a {routing.get('sla_days')}-business-day SLA [{routing.get('source_record_id')}].",
-        f"- Document search: retrieved {doc_cites}, including policy, planning, and capital allocation evidence for schedule acceleration.",
-        f"- Historical precedent: comparable requests include {comp_cites}.",
-        f"- Variance context: {variance.get('workstream')} is {variance.get('status')} with {variance.get('ytd_variance_pct', 0):+.1f}% YTD variance.",
-        "",
-        "## Conditions And Controls",
-        "",
-        *[f"- {condition}" for condition in conditions],
-        "",
-        "## Risk Flags",
-        "",
-        *[f"- {flag}" for flag in risk_flags],
-        "",
-        "## Next Step",
-        "",
-        "Send the memo, evidence pack, and tool trace to the required approver. Finance should keep the release milestone-based because the value case depends on measurable operational acceleration, not only budget availability.",
-    ])
+        with st.chat_message("assistant"):
+            if not config.ANTHROPIC_API_KEY:
+                st.warning(
+                    "Set your `ANTHROPIC_API_KEY` environment variable to enable the AI agents. "
+                    "Example: `export ANTHROPIC_API_KEY=sk-ant-...`"
+                )
+                st.markdown("**Demo mode:** Showing agent routing logic.")
+                question_lower = user_msg.lower()
+                if any(kw in question_lower for kw in ["memo", "report", "write", "document", "board"]):
+                    agent_name = "Investment Memo Writer"
+                elif any(kw in question_lower for kw in ["risk", "monte carlo", "probability", "tail", "p90"]):
+                    agent_name = "Risk & Scenario Agent"
+                elif any(kw in question_lower for kw in ["capex", "request", "approval", "workflow"]):
+                    agent_name = "CapEx Workflow Analyst"
+                elif any(kw in question_lower for kw in ["contract", "vendor", "policy", "sla"]):
+                    agent_name = "Document Intelligence"
+                else:
+                    agent_name = "Capital Allocation Analyst"
+                st.markdown(f'<span class="agent-badge">→ {agent_name}</span>', unsafe_allow_html=True)
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": f"[API key required — would route to **{agent_name}**]",
+                    "agent": agent_name,
+                })
+            elif use_agentic:
+                # AGENTIC MODE — agent autonomously uses tools
+                agent_status = st.status("Agent working...", expanded=True)
 
+                with agent_status:
+                    def on_console_step(step):
+                        if step.step_type == "tool_call":
+                            st.markdown(
+                                f'Calling <span class="tool-badge">{step.tool_name}</span>',
+                                unsafe_allow_html=True,
+                            )
+                            st.code(step.content, language="json")
+                        elif step.step_type == "tool_result":
+                            with st.expander(f"{step.tool_name} result", expanded=False):
+                                try:
+                                    st.json(public_evidence_view(json.loads(step.content)))
+                                except Exception:
+                                    st.text(step.content[:300])
 
-def render_evaluation() -> None:
-    hero("Evaluation Evidence", "Concrete tests mapped to the final-project rubric: correctness, repeatability, grounding, and clarity.", "Controls")
-    truth_rows = run_ground_truth_evaluation()
-    repeatability = run_repeatability_check()
-    pass_count = sum(1 for row in truth_rows if row["Pass"] == "Yes")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Ground Truth Pass Rate", f"{pass_count}/{len(truth_rows)}")
-    c2.metric("Repeatability", f"{repeatability['recommendation_consistency_pct']:.0f}%")
-    c3.metric("NPV Range", money(repeatability["npv_range_m"]))
-    c4.metric("ROI Range", f"{repeatability['roi_range_pct']:.2f} pts")
-    st.markdown("### Ground-Truth Decision Tests")
-    for row in truth_rows:
-        st.markdown(f"- **{row['Scenario']}**: expected `{row['Expected']}`, observed `{row['Observed']}` - **{row['Pass']}**. Evidence: {row['Evidence']}.")
-    st.markdown("### Repeatability Check")
-    st.json(repeatability)
-    st.markdown("### Rubric Alignment")
-    rubric = [
-        ("Problem Choice & Business Value", "Compresses multi-system finance evidence assembly into one capital allocation workflow.", "30%"),
-        ("Technical Depth", "Structured tool calls, deterministic financial scoring, document retrieval, variance checks, and memo generation.", "35%"),
-        ("Evaluation & Evidence", "Ground-truth tests, repeatability check, source citations, full tool trace, and numerical consistency.", "15%"),
-        ("Clarity & Communication", "Guided finance narrative, clear recommendation labels, evidence cards, and an investment memo.", "20%"),
-    ]
-    for area, evidence, weight in rubric:
-        st.markdown(f"- **{area} ({weight})**: {evidence}")
+                    agent_result = run_general_query(user_msg, on_step=on_console_step)
 
+                if agent_result.error:
+                    agent_status.update(label="Error", state="error")
+                    st.error(agent_result.error)
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": f"Error: {agent_result.error}",
+                        "agent": "Agentic Engine",
+                    })
+                else:
+                    agent_status.update(
+                        label=f"Done — {agent_result.total_tool_calls} tool calls, {agent_result.total_duration_ms / 1000:.1f}s",
+                        state="complete",
+                    )
+                    st.markdown(f'<span class="agent-badge">Agentic Engine</span>', unsafe_allow_html=True)
+                    st.caption(f"{agent_result.total_tool_calls} tool calls | {agent_result.total_duration_ms / 1000:.1f}s")
+                    st.markdown(agent_result.final_answer)
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": agent_result.final_answer,
+                        "agent": "Agentic Engine",
+                        "tool_calls": agent_result.total_tool_calls,
+                        "duration": f"{agent_result.total_duration_ms / 1000:.1f}s",
+                    })
+            else:
+                # DIRECT MODE — simple agent routing without tools
+                with st.spinner("Agent analyzing..."):
+                    from agents.orchestrator import query_router
+                    result = query_router(user_msg, model_data)
+                    st.markdown(f'<span class="agent-badge">{result["agent"]}</span>',
+                                unsafe_allow_html=True)
+                    st.markdown(result["response"])
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": result["response"],
+                        "agent": result["agent"],
+                    })
 
-def run_ground_truth_evaluation() -> list[dict[str, Any]]:
-    scenarios = [
-        ("Clearly approve", "Approve", {"title": "OISL Automated Alignment Station", "description": "Improve optical terminal yield.", "budget_pool": "TeraWave — OISL & Comms", "amount_m": 8.2, "priority_tag": "Risk Retirement", "urgency": "Standard", "completion_months": 6, "justification": "Retires a known OISL manufacturing bottleneck and protects deployment schedule confidence."}, "Strong risk-retirement fit, in-budget request, and high expected financial impact."),
-        ("Clearly reject", "Reject", {"title": "Noncritical Admin Hardware Refresh", "description": "Replace office hardware.", "budget_pool": "TeraWave — Software & Network Ops", "amount_m": 650.0, "priority_tag": "Maintenance", "urgency": "Standard", "completion_months": 24, "justification": "Refreshes aging support assets but does not directly accelerate deployment or retire critical program risk."}, "Low strategic fit and request exceeds available budget."),
-        ("Ambiguous / conditional", "Approve with Conditions", {"title": "Noncritical Spares Replenishment", "description": "Increase spare hardware inventory.", "budget_pool": "TeraWave — Satellite Manufacturing", "amount_m": 25.0, "priority_tag": "Maintenance", "urgency": "Standard", "completion_months": 24, "justification": "Improves resilience but has limited direct timeline acceleration, so finance should evaluate it with milestone controls."}, "Budget is available, but strategic fit is weaker and controls are appropriate."),
-    ]
-    rows = []
-    for name, expected, request, why in scenarios:
-        runs = run_tool_workflow(request)
-        decision = make_decision(request, runs)
-        financial = by_tool(runs)["run_financial_impact"]
-        budget = by_tool(runs)["check_budget"]
-        rows.append({"Scenario": name, "Expected": expected, "Observed": decision["recommendation"], "Pass": "Yes" if decision["recommendation"] == expected else "No", "NPV Impact ($M)": financial["npv_impact_m"], "ROI (%)": financial["roi_pct"], "Budget Status": budget["status"], "Evidence": why})
-    return rows
-
-
-def run_repeatability_check(n_runs: int = 5) -> dict[str, Any]:
-    recommendations = []
-    npvs = []
-    rois = []
-    for _ in range(n_runs):
-        runs = run_tool_workflow(DEMO_DAY_SCENARIO)
-        decision = make_decision(DEMO_DAY_SCENARIO, runs)
-        financial = by_tool(runs)["run_financial_impact"]
-        recommendations.append(decision["recommendation"])
-        npvs.append(financial["npv_impact_m"])
-        rois.append(financial["roi_pct"])
-    return {"request": DEMO_DAY_SCENARIO["title"], "runs": n_runs, "recommendations": recommendations, "unique_recommendations": sorted(set(recommendations)), "recommendation_consistency_pct": round(recommendations.count(recommendations[0]) / n_runs * 100, 1), "npv_range_m": round(max(npvs) - min(npvs), 2), "roi_range_pct": round(max(rois) - min(rois), 2), "result": "PASS" if len(set(recommendations)) == 1 else "REVIEW"}
-
-
-def render_implementation_notes() -> None:
-    hero("Implementation Notes", "How the prototype demonstrates finance workflow automation while staying demoable and auditable.", "Architecture")
-    st.markdown(
-        """
-        ### Technical Architecture
-
-        The app is intentionally scoped to one finance workflow. The agentic layer is represented by structured tools for budget
-        checks, financial impact, document retrieval, comparable precedents, variance status, and approval routing. Tool outputs
-        are then normalized into a recommendation, evidence pack, scorecard, and memo.
-
-        ### Production Safeguards
-
-        This should remain decision support, not autonomous approval. A production version would need source-system permissions,
-        audit logging, prompt-injection defenses for retrieved documents, model/version governance, human approval gates, and
-        monitoring for numerical consistency.
-        """
-    )
-    st.code("python -m streamlit run app.py", language="bash")
-
-
-def render_evidence_card(title: str, facts: list[str], citation: str) -> None:
-    facts_html = "".join(f"<div class='step-copy'>{fact}</div>" for fact in facts)
-    st.markdown(f"<div class='evidence-card'><div class='small-heading'>{title}</div>{facts_html}<div style='height:10px'></div><div class='citation'>Citation: {citation}</div></div>", unsafe_allow_html=True)
-
-
-def render_key_value_card(title: str, rows: list[tuple[str, Any]]) -> None:
-    body = "".join(f"<div class='step-copy'><strong>{key}:</strong> {value}</div>" for key, value in rows)
-    st.markdown(f"<div class='card'><div class='small-heading'>{title}</div>{body}</div>", unsafe_allow_html=True)
-
-
-def by_tool(runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    return {run["name"]: run["output"] for run in runs}
-
-
-def budget_pool_to_workstream(pool: str) -> str:
-    if "Launch Services" in pool:
-        return "Launch Services"
-    if "Ground Segment" in pool:
-        return "Ground Segment & Gateways"
-    if "OISL" in pool or "Comms" in pool:
-        return "Optical Inter-Satellite Links"
-    if "Software" in pool:
-        return "Software & Network Ops"
-    if "Manufacturing" in pool:
-        return "Satellite Manufacturing (LEO)"
-    return "Launch Services"
-
-
-def stable_adjustment(text: str) -> float:
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    bucket = int(digest[:4], 16) % 31
-    return 0.85 + bucket / 100
-
-
-def tokenize(text: str) -> set[str]:
-    stops = {"the", "and", "for", "with", "from", "that", "this", "into", "must", "shall", "are", "was", "were", "has", "have", "will", "may", "per", "not", "only", "than"}
-    return {tok for tok in re.sub(r"[^a-z0-9\s]", " ", text.lower()).split() if len(tok) > 2 and tok not in stops}
-
-
-def clean_dash(value: Any) -> str:
-    return str(value).replace("TeraWave — ", "").replace("TeraWave - ", "").replace("—", "-")
-
-
-def money(value: Any) -> str:
-    try:
-        return f"${float(value):,.1f}M" if abs(float(value)) < 100 else f"${float(value):,.0f}M"
-    except (TypeError, ValueError):
-        return "$0M"
-
-
-def index_or_zero(options: list[str], value: Any) -> int:
-    return options.index(value) if value in options else 0
-
-
-main()
+# ── Footer ───────────────────────────────────────────────────────────────────
+st.divider()
+st.markdown(
+    '<div style="text-align:center; color:#666; font-size:0.85em;">'
+    'Illustrative demo data only.<br>'
+    'TeraWave Capital Valuation Engine — Built with Python, Streamlit, Claude (Anthropic)<br>'
+    'Agentic AI × Corporate Finance'
+    '</div>',
+    unsafe_allow_html=True,
+)

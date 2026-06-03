@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -173,6 +174,7 @@ def main() -> None:
         page = st.radio(
             "Sections",
             ["Overview", "CapEx Workflow", "Evaluation Evidence", "Implementation Notes"],
+            index=1,
             label_visibility="collapsed",
         )
         st.divider()
@@ -297,10 +299,15 @@ def render_workflow() -> None:
 
     if request:
         st.session_state["latest_request"] = request
-        with st.spinner("Running finance evidence workflow..."):
-            tool_runs = run_tool_workflow(request)
+        st.markdown("### Agent Run Console")
+        tool_runs = run_tool_workflow(request, show_ui=True)
+        with st.status("Generating recommendation and investment memo...", expanded=True) as generation_status:
             decision = make_decision(request, tool_runs)
+            st.write(f"Recommendation generated: **{decision['recommendation']}**")
+            st.write(f"Decision score: **{decision['score']}/100**")
             memo = build_executive_memo(request, tool_runs, decision)
+            st.write("Investment committee memo generated from the evidence pack.")
+            generation_status.update(label="Recommendation and memo generated", state="complete", expanded=False)
         st.session_state["latest_tool_runs"] = tool_runs
         st.session_state["latest_decision"] = decision
         st.session_state["latest_memo"] = memo
@@ -333,7 +340,7 @@ def render_request_form(defaults: dict[str, Any]) -> dict[str, Any] | None:
         urgency = c4.selectbox("Urgency", URGENCY_LEVELS, index=index_or_zero(URGENCY_LEVELS, defaults.get("urgency")))
         completion_months = c5.number_input("Completion timeline (months)", min_value=1, max_value=60, value=int(defaults.get("completion_months", 9)), step=1)
         justification = st.text_area("Justification", value=defaults.get("justification", ""), height=118)
-        submitted = st.form_submit_button("Run Agentic Evaluation", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Run Finance Agent", type="primary", use_container_width=True)
     if not submitted:
         return None
     return {
@@ -370,7 +377,7 @@ def render_budget_snapshot() -> None:
         st.markdown(f"**{row['name'].replace('TeraWave — ', '')}** - {money(available)} available ({util:.0%} utilized)")
 
 
-def run_tool_workflow(request: dict[str, Any]) -> list[dict[str, Any]]:
+def run_tool_workflow(request: dict[str, Any], show_ui: bool = False) -> list[dict[str, Any]]:
     query = (
         f"{request['title']} {request['priority_tag']} launch manifest capital allocation policy "
         "speed over savings acceleration schedule risk initial operational capability"
@@ -384,8 +391,28 @@ def run_tool_workflow(request: dict[str, Any]) -> list[dict[str, Any]]:
         ("check_approval_routing", "Approval Routing", "Determine approval tier and SLA from policy.", {"amount_m": request["amount_m"], "urgency": request["urgency"]}),
     ]
     runs = []
-    for name, label, rationale, inputs in plan:
-        runs.append({"name": name, "label": label, "rationale": rationale, "input": inputs, "output": execute_demo_tool(name, inputs)})
+    status_context = st.status("Calling finance tools...", expanded=True) if show_ui else None
+    if status_context:
+        status_context.__enter__()
+    try:
+        for idx, (name, label, rationale, inputs) in enumerate(plan, start=1):
+            if show_ui:
+                st.markdown(f"**Tool {idx}: {label}**")
+                st.caption(rationale)
+                st.markdown(f'<span class="tool-chip">{name}</span>', unsafe_allow_html=True)
+                st.json({"input": inputs})
+                time.sleep(0.15)
+            output = execute_demo_tool(name, inputs)
+            run = {"name": name, "label": label, "rationale": rationale, "input": inputs, "output": output}
+            runs.append(run)
+            if show_ui:
+                st.json({"output": summarize_tool_output(name, output)})
+                st.divider()
+        if status_context:
+            status_context.update(label=f"Finance tool run complete - {len(runs)} tools called", state="complete", expanded=False)
+    finally:
+        if status_context:
+            status_context.__exit__(None, None, None)
     return runs
 
 
@@ -403,6 +430,50 @@ def execute_demo_tool(name: str, inputs: dict[str, Any]) -> dict[str, Any]:
     if name == "check_approval_routing":
         return tool_approval_routing(inputs["amount_m"], inputs.get("urgency", "Standard"))
     return {"error": f"Unknown tool: {name}"}
+
+
+def summarize_tool_output(name: str, output: dict[str, Any]) -> dict[str, Any]:
+    if name == "check_budget":
+        return {
+            "pool": clean_dash(output.get("budget_pool", "N/A")),
+            "available": money(output.get("available_m", 0)),
+            "utilization": f"{output.get('utilization_pct', 'N/A')}%",
+            "status": output.get("status", "N/A"),
+        }
+    if name == "run_financial_impact":
+        return {
+            "npv_impact": money(output.get("npv_impact_m", 0)),
+            "roi": f"{output.get('roi_pct', 0):.1f}%",
+            "payback": f"{output.get('payback_months', 'N/A')} months",
+            "assessment": output.get("assessment", "N/A"),
+        }
+    if name == "search_documents":
+        documents = output.get("documents", [])
+        return {
+            "documents_found": output.get("results_found", 0),
+            "top_citation": documents[0]["doc_id"] if documents else "N/A",
+            "top_document": documents[0]["title"] if documents else "N/A",
+        }
+    if name == "get_comparable_requests":
+        requests = output.get("requests", [])
+        return {
+            "comparables_found": output.get("comparables_found", 0),
+            "top_precedent": requests[0]["id"] if requests else "N/A",
+            "top_outcome": requests[0]["outcome"] if requests else "N/A",
+        }
+    if name == "get_variance_status":
+        return {
+            "workstream": output.get("workstream", "N/A"),
+            "status": output.get("status", "N/A"),
+            "ytd_variance": f"{output.get('ytd_variance_pct', 0):+.1f}%",
+        }
+    if name == "check_approval_routing":
+        return {
+            "tier": f"T{output.get('tier', 'N/A')}",
+            "approver": output.get("approver", "N/A"),
+            "sla": f"{output.get('sla_days', 'N/A')} business days",
+        }
+    return output
 
 
 def tool_check_budget(pool_name: str) -> dict[str, Any]:
@@ -572,7 +643,13 @@ def render_results(request: dict[str, Any], runs: list[dict[str, Any]], decision
     comps = evidence["get_comparable_requests"].get("requests", [])
     variance = evidence["get_variance_status"]
 
-    st.markdown("### 2. Recommendation")
+    st.markdown("### 2. Tool-Calling Audit Trail")
+    render_tool_timeline(runs)
+
+    st.markdown("### 3. Generated Analyst Readout")
+    st.markdown(build_analyst_readout(request, runs, decision))
+
+    st.markdown("### 4. Recommendation")
     st.markdown(
         f"""
         <div class="recommendation"><div class="rec-label">Recommendation</div><h2>{decision['recommendation']}</h2><div class="muted">{decision['rationale']}</div></div>
@@ -591,7 +668,7 @@ def render_results(request: dict[str, Any], runs: list[dict[str, Any]], decision
         for condition in decision["conditions"]:
             st.markdown(f"- {condition}")
 
-    st.markdown("### 3. Finance Evidence Pack")
+    st.markdown("### 5. Finance Evidence Pack")
     cols = st.columns(3)
     with cols[0]:
         render_evidence_card("Budget", [f"Pool: {clean_dash(budget.get('budget_pool', 'N/A'))}", f"Total: {money(budget.get('total_budget_m', 0))}", f"Available: {money(budget.get('available_m', 0))}", f"Utilization: {budget.get('utilization_pct', 'N/A')}%"], budget.get("source_record_id", "budget source"))
@@ -616,7 +693,7 @@ def render_results(request: dict[str, Any], runs: list[dict[str, Any]], decision
         st.markdown("#### Variance Context")
         render_key_value_card("Current Workstream", [("Workstream", variance.get("workstream", "N/A")), ("YTD Budget", money(variance.get("ytd_budget_m", 0))), ("YTD Actual", money(variance.get("ytd_actual_m", 0))), ("YTD Variance", f"{money(variance.get('ytd_variance_m', 0))} ({variance.get('ytd_variance_pct', 0):+.1f}%)"), ("Status", variance.get("status", "N/A"))])
 
-    with st.expander("Full Tool Trace", expanded=False):
+    with st.expander("Full Tool Trace", expanded=True):
         for run in runs:
             st.markdown(f"**{run['label']}**")
             st.caption(run["rationale"])
@@ -624,9 +701,46 @@ def render_results(request: dict[str, Any], runs: list[dict[str, Any]], decision
             st.json({"input": run["input"], "output": run["output"]})
             st.divider()
 
-    st.markdown("### 4. Investment Committee Memo")
+    st.markdown("### 6. Investment Committee Memo")
     st.markdown(memo)
     st.download_button("Download memo (.md)", data=memo, file_name="terawave_capval_investment_memo.md", mime="text/markdown", use_container_width=True)
+
+
+def render_tool_timeline(runs: list[dict[str, Any]]) -> None:
+    cols = st.columns(3)
+    for idx, run in enumerate(runs):
+        output = summarize_tool_output(run["name"], run["output"])
+        with cols[idx % 3]:
+            facts = [f"{key}: {value}" for key, value in output.items()]
+            render_evidence_card(run["label"], facts[:4], run["name"])
+
+
+def build_analyst_readout(request: dict[str, Any], runs: list[dict[str, Any]], decision: dict[str, Any]) -> str:
+    evidence = by_tool(runs)
+    budget = evidence["check_budget"]
+    financial = evidence["run_financial_impact"]
+    routing = evidence["check_approval_routing"]
+    documents = evidence["search_documents"].get("documents", [])
+    comparables = evidence["get_comparable_requests"].get("requests", [])
+    variance = evidence["get_variance_status"]
+
+    doc_titles = "; ".join(doc["title"] for doc in documents[:2]) or "No documents retrieved"
+    comp_labels = "; ".join(f"{item['id']} ({item['status']})" for item in comparables[:2]) or "No close precedents"
+    conditions = "; ".join(decision["conditions"]) if decision["conditions"] else "No added conditions required"
+
+    return "\n".join(
+        [
+            "The finance agent generated this readout from the tool outputs:",
+            "",
+            f"- **Budget position:** {clean_dash(budget.get('budget_pool'))} has {money(budget.get('available_m', 0))} available, so the {money(request['amount_m'])} request fits within current headroom.",
+            f"- **Financial merit:** The impact model estimates {money(financial.get('npv_impact_m', 0))} of NPV impact, {financial.get('roi_pct', 0):.1f}% ROI, and a {financial.get('payback_months')} month payback.",
+            f"- **Policy and routing:** Approval routes to Tier {routing.get('tier')} ({routing.get('approver')}) with a {routing.get('sla_days')}-business-day SLA.",
+            f"- **Document evidence:** Retrieval found {doc_titles}.",
+            f"- **Precedent evidence:** Comparable historical requests include {comp_labels}.",
+            f"- **Variance context:** {variance.get('workstream')} is currently {variance.get('status')} with {variance.get('ytd_variance_pct', 0):+.1f}% YTD variance.",
+            f"- **Generated control recommendation:** {conditions}.",
+        ]
+    )
 
 
 def render_scorecard(financial: dict[str, Any], budget: dict[str, Any], variance: dict[str, Any], decision: dict[str, Any]) -> None:

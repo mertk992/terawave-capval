@@ -559,7 +559,7 @@ with tab_workflow:
             req_amount = fc2.number_input(
                 "Amount ($M)",
                 min_value=0.1,
-                max_value=500.0,
+                max_value=5000.0,
                 value=float(demo_defaults.get("amount_m", 10.0)),
                 step=0.5,
             )

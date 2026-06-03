@@ -89,43 +89,75 @@ st.set_page_config(
 # ── Custom CSS ───────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    .stMetric { background-color: #1E2530; padding: 12px; border-radius: 8px; }
-    .disclaimer {
-        background-color: #2C1810; border: 1px solid #FF6B35; border-radius: 8px;
-        padding: 12px 16px; margin-bottom: 16px; font-size: 0.85em; color: #FFB088;
+    :root {
+        --accent: #4C8DFF;
+        --surface: #161B26;
+        --surface-2: #1B2230;
+        --border: rgba(140, 160, 190, 0.16);
+        --muted: #8A97AC;
     }
+    /* Hide Streamlit chrome for a cleaner, app-like surface */
+    #MainMenu, footer, header[data-testid="stHeader"] { visibility: hidden; }
+    .block-container { padding-top: 2.4rem; max-width: 1180px; }
+
+    /* Typography */
+    h1 { font-weight: 700; letter-spacing: -0.02em; }
+    h2, h3 { font-weight: 650; letter-spacing: -0.01em; }
+    .header-subtitle { color: var(--muted); font-size: 1.0em; margin-top: -8px; margin-bottom: 6px; }
+
+    /* Metric cards */
+    div[data-testid="stMetric"] {
+        background: var(--surface); border: 1px solid var(--border);
+        padding: 14px 16px; border-radius: 12px;
+    }
+    div[data-testid="stMetricLabel"] { color: var(--muted); }
+
+    /* Tabs */
+    button[data-baseweb="tab"] { font-size: 0.95rem; font-weight: 600; }
+    div[data-baseweb="tab-list"] { gap: 4px; border-bottom: 1px solid var(--border); }
+
+    /* Inputs / forms */
+    div[data-testid="stForm"] {
+        border: 1px solid var(--border); border-radius: 14px;
+        padding: 18px 20px; background: rgba(22, 27, 38, 0.5);
+    }
+
+    .disclaimer { color: var(--muted); font-size: 0.8em; margin: 2px 0 14px; }
     .agent-badge {
-        display: inline-block; background: #0066CC; color: white; padding: 2px 10px;
-        border-radius: 12px; font-size: 0.8em; font-weight: 600; margin-bottom: 8px;
+        display: inline-block; background: rgba(76, 141, 255, 0.14); color: #BAD4FF;
+        border: 1px solid rgba(76, 141, 255, 0.3); padding: 2px 10px;
+        border-radius: 999px; font-size: 0.78em; font-weight: 600; margin-bottom: 8px;
     }
     .tool-badge {
-        display: inline-block; background: #1a1a2e; border: 1px solid #00A3E0;
-        color: #00A3E0; padding: 2px 8px; border-radius: 6px; font-size: 0.75em;
-        font-family: monospace; margin: 2px;
+        display: inline-block; background: rgba(76, 141, 255, 0.10); border: 1px solid rgba(76, 141, 255, 0.28);
+        color: #BAD4FF; padding: 2px 9px; border-radius: 7px; font-size: 0.74em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 2px;
     }
-    .step-header {
-        display: flex; align-items: center; gap: 8px;
-        font-weight: 600; font-size: 0.95em;
+    .step-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.95em; }
+    .intro-card {
+        background: var(--surface); border: 1px solid var(--border);
+        border-left: 3px solid var(--accent); border-radius: 12px;
+        padding: 16px 20px; margin-bottom: 18px;
     }
+    .intro-card h3 { margin: 0 0 6px; }
+    .intro-card p { color: var(--muted); margin: 0; font-size: 0.92em; }
     .agentic-banner {
-        background: linear-gradient(135deg, #0a1628, #1a1a2e);
-        border: 1px solid #0066CC; border-radius: 8px;
-        padding: 12px 16px; margin-bottom: 16px; font-size: 0.9em;
+        background: var(--surface-2); border: 1px solid var(--border);
+        border-radius: 10px; padding: 12px 16px; margin-bottom: 16px;
+        font-size: 0.86em; color: var(--muted);
     }
-    .header-subtitle { color: #95A5A6; font-size: 1.1em; margin-top: -10px; }
-    div[data-testid="stSidebar"] { background-color: #0a0e14; }
+    div[data-testid="stSidebar"] { background-color: #10141C; border-right: 1px solid var(--border); }
+    div[data-testid="stSidebar"] .block-container { padding-top: 1.5rem; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Header ───────────────────────────────────────────────────────────────────
 st.title("CapEx Command Center")
-st.markdown('<p class="header-subtitle">Agentic AI workflow for finance-led CapEx review, evidence gathering, and investment memo generation</p>',
+st.markdown('<p class="header-subtitle">An agentic AI workflow for finance-led capital expenditure decisions — from request intake to investment memo.</p>',
             unsafe_allow_html=True)
-
 st.markdown(
-    '<div class="disclaimer"><strong>DEMO DISCLAIMER:</strong> '
-    'This prototype uses illustrative enterprise finance data. It does not represent actual company financials, '
-    'projections, contracts, approvals, or internal records. The aerospace program is a synthetic case study.</div>',
+    '<div class="disclaimer">Prototype using synthetic enterprise data. Not actual company financials, '
+    'contracts, or approvals. The aerospace program is an illustrative case study.</div>',
     unsafe_allow_html=True,
 )
 
@@ -180,35 +212,36 @@ def clean_display_df(df):
 
 # ── Sidebar: Scenario Controls ───────────────────────────────────────────────
 with st.sidebar:
-    st.header("Scenario Parameters")
-    st.caption("Adjust assumptions to explore scenarios")
-
-    st.subheader("Financial Assumptions")
-    capex_mult = st.slider("CapEx Multiplier", 0.7, 1.5, 1.0, 0.05,
-                           help="1.0 = base case. >1 = cost overrun, <1 = cost savings")
-    rev_mult = st.slider("Revenue Multiplier", 0.5, 1.5, 1.0, 0.05,
-                         help="1.0 = base case. Scales all revenue projections")
-    opex_mult = st.slider("OpEx Multiplier", 0.7, 1.3, 1.0, 0.05)
-    wacc = st.slider("WACC / Discount Rate (%)", 8, 18, int(config.WACC * 100), 1)
-    wacc = wacc / 100.0
-
-    st.subheader("Timeline & Deployment")
-    timeline_shift = st.slider("Timeline Shift (years)", -1, 3, 0,
-                               help="Positive = delay, negative = acceleration")
-    cadence = st.selectbox("Deployment Cadence",
-                           ["baseline", "aggressive", "conservative"],
-                           help="Aggressive = front-load spend, compress timelines")
-
-    st.subheader("Monte Carlo")
-    n_sims = st.select_slider("Simulations", [500, 1000, 2500, 5000, 10000], value=2500)
-
+    st.markdown("### CapEx Command Center")
+    st.caption("Start on the **CapEx Decision Workflow** tab. Model controls below are "
+               "optional and feed the Financial Model and Monte Carlo tabs.")
     st.divider()
+
+    with st.expander("Scenario & model controls", expanded=False):
+        st.markdown("**Financial assumptions**")
+        capex_mult = st.slider("CapEx Multiplier", 0.7, 1.5, 1.0, 0.05,
+                               help="1.0 = base case. >1 = cost overrun, <1 = cost savings")
+        rev_mult = st.slider("Revenue Multiplier", 0.5, 1.5, 1.0, 0.05,
+                             help="1.0 = base case. Scales all revenue projections")
+        opex_mult = st.slider("OpEx Multiplier", 0.7, 1.3, 1.0, 0.05)
+        wacc = st.slider("WACC / Discount Rate (%)", 8, 18, int(config.WACC * 100), 1)
+        wacc = wacc / 100.0
+
+        st.markdown("**Timeline & deployment**")
+        timeline_shift = st.slider("Timeline Shift (years)", -1, 3, 0,
+                                   help="Positive = delay, negative = acceleration")
+        cadence = st.selectbox("Deployment Cadence",
+                               ["baseline", "aggressive", "conservative"],
+                               help="Aggressive = front-load spend, compress timelines")
+
+        st.markdown("**Monte Carlo**")
+        n_sims = st.select_slider("Simulations", [500, 1000, 2500, 5000, 10000], value=2500)
+
     run_mc = st.button("Run Full Analysis", type="primary", use_container_width=True)
+    st.caption("Recomputes the Financial Model and Monte Carlo tabs.")
 
-    # ── Editable Base Inputs ─────────────────────────────────────────────────
-    st.divider()
-    with st.expander("Edit Base Assumptions", expanded=False):
-        st.caption("Edit the underlying values directly. Multipliers still apply on top.")
+    with st.expander("Edit base assumptions", expanded=False):
+        st.caption("Edit underlying values directly. Multipliers still apply on top.")
 
         st.markdown("**CapEx by Workstream ($M)**")
         capex_overrides = {}
@@ -452,25 +485,14 @@ Frame overspends through the 'accelerating progress' lens where justified."""
 
 # ── Tab 5: CapEx Workflow ────────────────────────────────────────────────────
 with tab_workflow:
-    st.markdown("""
-    ### Agentic Capital Expenditure Workflow
-    Submit a CapEx request and an **autonomous AI agent** evaluates it — choosing which
-    tools to call, chaining analyses, and producing a recommendation. Watch the agent
-    think in real-time.
-    """)
-
-    st.info(
-        "Start here for the demo: review the prefilled request, click **Run Agentic Analysis**, "
-        "then inspect the recommendation, evidence pack, and investment memo."
-    )
-
     st.markdown(
-        '<div class="agentic-banner">'
-        '<strong>How this works:</strong> The agent receives your request and a set of tools '
-        '(budget checker, financial analyzer, document search, comparable finder, approval router, '
-        'variance checker). It autonomously decides which tools to call, interprets results, and '
-        'chains additional calls based on what it discovers. This is <strong>genuine agentic AI</strong> — '
-        'the reasoning path is not hardcoded.</div>',
+        '<div class="intro-card">'
+        '<h3>Agentic Capital Expenditure Workflow</h3>'
+        '<p>Review the prefilled request, click <strong>Run Agentic Analysis</strong>, then inspect '
+        'the recommendation, evidence pack, and investment memo. An autonomous agent decides which '
+        'tools to call — budget, financials, documents, comparables, approvals, variance — and chains '
+        'them based on what it finds. The reasoning path is not hardcoded.</p>'
+        '</div>',
         unsafe_allow_html=True,
     )
 

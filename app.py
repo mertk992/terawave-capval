@@ -1,8 +1,8 @@
 """
-TeraWave CapVal
-===============
+CapExFlow AI
+============
 
-Focused Streamlit prototype for agentic CapEx decision support.
+Focused Streamlit prototype for finance-led CapEx decision support.
 All data is synthetic and for demonstration only.
 """
 
@@ -18,8 +18,8 @@ from typing import Any
 import streamlit as st
 
 
-APP_TITLE = "TeraWave CapVal"
-APP_SUBTITLE = "Agentic AI CapEx decision support for aerospace satellite programs"
+APP_TITLE = "CapExFlow AI"
+APP_SUBTITLE = "Finance workflow automation for evidence-backed capital allocation"
 DATA_PATH = Path(__file__).parent / "data" / "synthetic_enterprise_data.json"
 
 PRIORITY_TAGS = [
@@ -34,7 +34,7 @@ URGENCY_LEVELS = ["Standard", "Expedited", "Emergency"]
 
 DEMO_DAY_SCENARIO = {
     "title": "Critical-Path Launch Acceleration Package",
-    "description": "Add launch integration shifts and pad-readiness work to pull the first operational TeraWave deployment window forward.",
+    "description": "Add integration shifts and readiness work to pull the first operational deployment window forward.",
     "budget_pool": "TeraWave — Launch Services",
     "amount_m": 45.0,
     "priority_tag": "Critical Path",
@@ -94,7 +94,7 @@ VARIANCE_STATUS = {
     },
 }
 
-st.set_page_config(page_title=APP_TITLE, page_icon="TW", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title=APP_TITLE, page_icon="CF", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown(
     """
@@ -168,8 +168,8 @@ def load_data() -> dict[str, Any]:
 
 def main() -> None:
     with st.sidebar:
-        st.markdown("### Demo Guide")
-        st.caption("One guided story, not a broad dashboard.")
+        st.markdown("### Workflow Guide")
+        st.caption("One finance process, from intake to memo.")
         page = st.radio(
             "Sections",
             ["Overview", "CapEx Workflow", "Evaluation Evidence", "Implementation Notes"],
@@ -178,8 +178,8 @@ def main() -> None:
         st.divider()
         st.markdown("**Recommended live path**")
         st.markdown("1. Explain the finance bottleneck.")
-        st.markdown("2. Load the launch acceleration request.")
-        st.markdown("3. Run the tool workflow.")
+        st.markdown("2. Load the example CapEx request.")
+        st.markdown("3. Run the finance tool workflow.")
         st.markdown("4. Show evidence, recommendation, memo.")
         st.markdown("5. Close with evaluation and safeguards.")
         st.divider()
@@ -195,7 +195,7 @@ def main() -> None:
         render_implementation_notes()
 
 
-def hero(title: str, subtitle: str, pill: str = "Final Project Prototype") -> None:
+def hero(title: str, subtitle: str, pill: str = "Finance Workflow Prototype") -> None:
     st.markdown(
         f"""
         <div class="hero">
@@ -209,11 +209,14 @@ def hero(title: str, subtitle: str, pill: str = "Final Project Prototype") -> No
 
 
 def render_overview() -> None:
-    hero(APP_TITLE, f"{APP_SUBTITLE}. The demo turns one launch-acceleration CapEx request into an auditable recommendation and executive memo.")
+    hero(
+        APP_TITLE,
+        f"{APP_SUBTITLE}. The demo turns a capital request into an auditable recommendation, evidence pack, and executive memo.",
+    )
     st.markdown(
         """
-        <div class="disclaimer"><strong>Demo disclaimer:</strong> This prototype uses synthetic aerospace program data.
-        It does not represent actual Blue Origin financials, supplier records, launch plans, approvals, or internal documents.</div>
+        <div class="disclaimer"><strong>Demo disclaimer:</strong> This prototype uses synthetic enterprise finance data.
+        It does not represent real company financials, supplier records, approval records, or internal documents.</div>
         """,
         unsafe_allow_html=True,
     )
@@ -221,10 +224,13 @@ def render_overview() -> None:
     st.subheader("Business Problem")
     st.markdown(
         """
-        Finance analysts evaluating major aerospace CapEx requests must gather evidence from budget systems,
-        planning models, policy documents, historical approvals, variance reports, and technical risk documents.
-        That takes time and creates inconsistency. **TeraWave CapVal compresses the work into an auditable
-        agentic workflow** that produces a recommendation and memo grounded in evidence.
+        Finance teams evaluating major CapEx requests have to pull evidence from ERP budget pools,
+        planning models, approval policies, historical requests, variance reports, and supporting documents.
+        The work is usually spread across spreadsheets, email, workflow tools, and shared drives.
+
+        **CapExFlow AI compresses that work into an auditable finance workflow**: intake the request,
+        gather evidence, evaluate financial merit, determine approval routing, and produce a memo a CFO
+        or investment committee can actually use.
         """
     )
 
@@ -232,7 +238,7 @@ def render_overview() -> None:
         """
         <div class="step-row">
             <div class="step-card"><div class="step-num">Step 01</div><div class="step-title">CapEx request</div><div class="step-copy">Structured intake captures amount, pool, urgency, timeline, and rationale.</div></div>
-            <div class="step-card"><div class="step-num">Step 02</div><div class="step-title">Tool-using agent</div><div class="step-copy">The workflow calls budget, valuation, RAG, precedent, variance, and routing tools.</div></div>
+            <div class="step-card"><div class="step-num">Step 02</div><div class="step-title">Finance tool workflow</div><div class="step-copy">The workflow calls budget, valuation, document, precedent, variance, and routing tools.</div></div>
             <div class="step-card"><div class="step-num">Step 03</div><div class="step-title">Evidence pack</div><div class="step-copy">Outputs become auditable facts with source IDs and citations.</div></div>
             <div class="step-card"><div class="step-num">Step 04</div><div class="step-title">Recommendation</div><div class="step-copy">Approve, approve with conditions, defer, or reject.</div></div>
             <div class="step-card"><div class="step-num">Step 05</div><div class="step-title">Executive memo</div><div class="step-copy">A short investment memo summarizes the ask, evidence, controls, and next step.</div></div>
@@ -241,14 +247,17 @@ def render_overview() -> None:
         unsafe_allow_html=True,
     )
 
-    st.subheader("Demo Day Narrative")
+    st.subheader("Example Case")
     c1, c2 = st.columns([1.25, 1])
     with c1:
         st.markdown(
             """
-            The final demo centers on one path: **critical-path launch acceleration for a satellite constellation program**.
-            This is a strong finance story because the right decision is not just cost minimization. The request may be
-            worth approving if it pulls initial operational capability forward and reduces schedule risk.
+            The workflow is industry-agnostic, but the example case uses a capital-intensive program:
+            **a critical-path launch acceleration request**.
+
+            This is a strong finance scenario because the right answer is not simply “cut cost.”
+            The finance question is whether the request creates enough schedule acceleration, risk reduction,
+            and progress per dollar to justify conditional approval.
             """
         )
     with c2:
@@ -266,25 +275,29 @@ def render_overview() -> None:
 
 
 def render_workflow() -> None:
-    hero("CapEx Workflow", "Submit a request, run the tool workflow, and generate an evidence-backed memo.", "Main Demo")
+    hero(
+        "Capital Request Review",
+        "Submit a CapEx request, run the finance evidence workflow, and generate an investment-committee memo.",
+        "Main Workflow",
+    )
     defaults = st.session_state.get("request_defaults", DEMO_DAY_SCENARIO.copy())
 
     left, right = st.columns([1.08, 0.92], gap="large")
     with left:
         st.markdown("### 1. Submit CapEx Request")
-        if st.button("Load Demo Day Scenario", type="secondary", use_container_width=True):
+        if st.button("Load Example Request", type="secondary", use_container_width=True):
             st.session_state["request_defaults"] = DEMO_DAY_SCENARIO.copy()
             st.rerun()
         request = render_request_form(defaults)
     with right:
-        st.markdown("### What The Agent Checks")
+        st.markdown("### What Finance Checks")
         render_tool_catalog()
         st.markdown("### Budget Pools")
         render_budget_snapshot()
 
     if request:
         st.session_state["latest_request"] = request
-        with st.spinner("Running CapVal tool workflow..."):
+        with st.spinner("Running finance evidence workflow..."):
             tool_runs = run_tool_workflow(request)
             decision = make_decision(request, tool_runs)
             memo = build_executive_memo(request, tool_runs, decision)
@@ -308,7 +321,12 @@ def render_request_form(defaults: dict[str, Any]) -> dict[str, Any] | None:
         title = st.text_input("Request title", value=defaults.get("title", ""))
         description = st.text_area("Description", value=defaults.get("description", ""), height=92)
         c1, c2 = st.columns(2)
-        budget_pool = c1.selectbox("Budget pool", pools, index=index_or_zero(pools, defaults.get("budget_pool")))
+        budget_pool = c1.selectbox(
+            "Budget pool",
+            pools,
+            index=index_or_zero(pools, defaults.get("budget_pool")),
+            format_func=clean_dash,
+        )
         amount_m = c2.number_input("Amount ($M)", min_value=0.1, max_value=1000.0, value=float(defaults.get("amount_m", 45.0)), step=0.5)
         c3, c4, c5 = st.columns(3)
         priority_tag = c3.selectbox("Priority tag", PRIORITY_TAGS, index=index_or_zero(PRIORITY_TAGS, defaults.get("priority_tag")))
@@ -332,10 +350,10 @@ def render_request_form(defaults: dict[str, Any]) -> dict[str, Any] | None:
 
 def render_tool_catalog() -> None:
     tools = [
-        ("check_budget", "ERP-style pool availability and headroom"),
-        ("run_financial_impact", "NPV, ROI, payback, progress, risk scores"),
-        ("search_documents", "Policy, launch manifest, risk, and pipeline evidence"),
-        ("get_comparable_requests", "Historical CapEx precedent search"),
+        ("check_budget", "ERP-style budget pool availability"),
+        ("run_financial_impact", "NPV, ROI, payback, progress, and risk scores"),
+        ("search_documents", "Policy, planning, risk, and business-case evidence"),
+        ("get_comparable_requests", "Historical capital request precedent"),
         ("get_variance_status", "YTD budget vs. actual context"),
         ("check_approval_routing", "Approval tier and SLA policy"),
     ]
@@ -358,11 +376,11 @@ def run_tool_workflow(request: dict[str, Any]) -> list[dict[str, Any]]:
         "speed over savings acceleration schedule risk initial operational capability"
     )
     plan = [
-        ("check_budget", "Budget Check", "Confirm whether the request fits inside the selected budget pool.", {"budget_pool": request["budget_pool"]}),
-        ("run_financial_impact", "Financial Impact", "Estimate NPV, ROI, payback, progress, and risk retirement.", {"amount_m": request["amount_m"], "priority_tag": request["priority_tag"], "completion_months": request["completion_months"], "title": request["title"]}),
-        ("search_documents", "Document Search", "Retrieve policy and planning evidence relevant to acceleration and launch risk.", {"query": query}),
-        ("get_comparable_requests", "Precedent Search", "Find similar historical requests and outcomes.", {"budget_pool": request["budget_pool"], "priority_tag": request["priority_tag"], "amount_m": request["amount_m"]}),
-        ("get_variance_status", "Variance Check", "Check whether the workstream has current budget-vs-actual pressure.", {"workstream": budget_pool_to_workstream(request["budget_pool"])}),
+        ("check_budget", "Budget Availability", "Confirm whether the request fits inside the selected budget pool.", {"budget_pool": request["budget_pool"]}),
+        ("run_financial_impact", "Financial Impact", "Estimate NPV, ROI, payback, progress contribution, and risk retirement.", {"amount_m": request["amount_m"], "priority_tag": request["priority_tag"], "completion_months": request["completion_months"], "title": request["title"]}),
+        ("search_documents", "Document Evidence", "Retrieve policy, planning, and business-case evidence relevant to the request.", {"query": query}),
+        ("get_comparable_requests", "Precedent Review", "Find similar historical requests and outcomes.", {"budget_pool": request["budget_pool"], "priority_tag": request["priority_tag"], "amount_m": request["amount_m"]}),
+        ("get_variance_status", "Variance Context", "Check whether the workstream has current budget-vs-actual pressure.", {"workstream": budget_pool_to_workstream(request["budget_pool"])}),
         ("check_approval_routing", "Approval Routing", "Determine approval tier and SLA from policy.", {"amount_m": request["amount_m"], "urgency": request["urgency"]}),
     ]
     runs = []
@@ -573,23 +591,23 @@ def render_results(request: dict[str, Any], runs: list[dict[str, Any]], decision
         for condition in decision["conditions"]:
             st.markdown(f"- {condition}")
 
-    st.markdown("### 3. Evidence Behind The Recommendation")
+    st.markdown("### 3. Finance Evidence Pack")
     cols = st.columns(3)
     with cols[0]:
         render_evidence_card("Budget", [f"Pool: {clean_dash(budget.get('budget_pool', 'N/A'))}", f"Total: {money(budget.get('total_budget_m', 0))}", f"Available: {money(budget.get('available_m', 0))}", f"Utilization: {budget.get('utilization_pct', 'N/A')}%"], budget.get("source_record_id", "budget source"))
     with cols[1]:
         render_evidence_card("Financial", [f"NPV impact: {money(financial.get('npv_impact_m', 0))}", f"Payback: {financial.get('payback_months', 'N/A')} months", f"Progress score: {financial.get('progress_score', 'N/A')}", f"Risk-retirement score: {financial.get('risk_retirement_score', 'N/A')}"], financial.get("source_record_id", "financial model"))
     with cols[2]:
-        render_evidence_card("Policy Routing", [f"Tier: {routing.get('tier', 'N/A')}", f"Approver: {routing.get('approver', 'N/A')}", f"SLA: {routing.get('sla_days', 'N/A')} business days", f"Urgency: {routing.get('urgency', request['urgency'])}"], routing.get("source_record_id", "approval policy"))
+        render_evidence_card("Approval Policy", [f"Tier: {routing.get('tier', 'N/A')}", f"Approver: {routing.get('approver', 'N/A')}", f"SLA: {routing.get('sla_days', 'N/A')} business days", f"Urgency: {routing.get('urgency', request['urgency'])}"], routing.get("source_record_id", "approval policy"))
 
     d1, d2 = st.columns([1, 1], gap="large")
     with d1:
-        st.markdown("#### Retrieved Documents")
+        st.markdown("#### Source Documents")
         for doc in docs[:3]:
             with st.expander(f"{doc.get('title')} [{doc.get('doc_id')}]"):
                 st.caption(f"{doc.get('type', 'document').title()} | relevance {doc.get('relevance', 0):.0%}")
                 st.write(doc.get("excerpt", "")[:900] + ("..." if len(doc.get("excerpt", "")) > 900 else ""))
-        st.markdown("#### Historical Precedents")
+        st.markdown("#### Historical Capital Requests")
         for item in comps[:4]:
             st.markdown(f"- **{item.get('id')}**: {item.get('title')} - {money(item.get('amount_m', 0))}, {item.get('status')}; {item.get('outcome')}")
     with d2:
@@ -606,7 +624,7 @@ def render_results(request: dict[str, Any], runs: list[dict[str, Any]], decision
             st.json({"input": run["input"], "output": run["output"]})
             st.divider()
 
-    st.markdown("### 4. Executive Investment Memo")
+    st.markdown("### 4. Investment Committee Memo")
     st.markdown(memo)
     st.download_button("Download memo (.md)", data=memo, file_name="terawave_capval_investment_memo.md", mime="text/markdown", use_container_width=True)
 
@@ -640,7 +658,7 @@ def build_executive_memo(request: dict[str, Any], runs: list[dict[str, Any]], de
         f"# Executive Investment Memo: {request['title']}",
         "",
         f"**Date:** {date.today().isoformat()}",
-        "**Prepared by:** TeraWave CapVal",
+        "**Prepared by:** CapExFlow AI",
         "**Decision status:** Decision support only; synthetic demo data.",
         "",
         "## Recommendation",
@@ -660,7 +678,7 @@ def build_executive_memo(request: dict[str, Any], runs: list[dict[str, Any]], de
         f"- Budget: {clean_dash(budget.get('budget_pool'))} has {money(budget.get('available_m', 0))} available against a {money(budget.get('total_budget_m', 0))} pool [{budget.get('source_record_id')}].",
         f"- Financial impact: estimated NPV impact is {money(financial.get('npv_impact_m', 0))}, ROI is {financial.get('roi_pct', 0):,.1f}%, and payback is {financial.get('payback_months')} months [{financial.get('source_record_id')}].",
         f"- Approval policy: the request routes to Tier {routing.get('tier')} ({routing.get('approver')}) with a {routing.get('sla_days')}-business-day SLA [{routing.get('source_record_id')}].",
-        f"- Document search: retrieved {doc_cites}, including launch manifest and capital allocation evidence for schedule acceleration.",
+        f"- Document search: retrieved {doc_cites}, including policy, planning, and capital allocation evidence for schedule acceleration.",
         f"- Historical precedent: comparable requests include {comp_cites}.",
         f"- Variance context: {variance.get('workstream')} is {variance.get('status')} with {variance.get('ytd_variance_pct', 0):+.1f}% YTD variance.",
         "",
@@ -674,12 +692,12 @@ def build_executive_memo(request: dict[str, Any], runs: list[dict[str, Any]], de
         "",
         "## Next Step",
         "",
-        "Send the memo, evidence pack, and tool trace to the required approver. Finance should keep the release milestone-based because the value case depends on launch-readiness acceleration, not only budget availability.",
+        "Send the memo, evidence pack, and tool trace to the required approver. Finance should keep the release milestone-based because the value case depends on measurable operational acceleration, not only budget availability.",
     ])
 
 
 def render_evaluation() -> None:
-    hero("Evaluation Evidence", "Concrete tests mapped to the final-project rubric: correctness, repeatability, grounding, and clarity.", "Evidence")
+    hero("Evaluation Evidence", "Concrete tests mapped to the final-project rubric: correctness, repeatability, grounding, and clarity.", "Controls")
     truth_rows = run_ground_truth_evaluation()
     repeatability = run_repeatability_check()
     pass_count = sum(1 for row in truth_rows if row["Pass"] == "Yes")
@@ -688,17 +706,17 @@ def render_evaluation() -> None:
     c2.metric("Repeatability", f"{repeatability['recommendation_consistency_pct']:.0f}%")
     c3.metric("NPV Range", money(repeatability["npv_range_m"]))
     c4.metric("ROI Range", f"{repeatability['roi_range_pct']:.2f} pts")
-    st.markdown("### Ground-Truth Scenario Tests")
+    st.markdown("### Ground-Truth Decision Tests")
     for row in truth_rows:
         st.markdown(f"- **{row['Scenario']}**: expected `{row['Expected']}`, observed `{row['Observed']}` - **{row['Pass']}**. Evidence: {row['Evidence']}.")
     st.markdown("### Repeatability Check")
     st.json(repeatability)
     st.markdown("### Rubric Alignment")
     rubric = [
-        ("Problem Choice & Business Value", "Compresses multi-system finance evidence assembly into one CapEx decision workflow.", "30%"),
+        ("Problem Choice & Business Value", "Compresses multi-system finance evidence assembly into one capital allocation workflow.", "30%"),
         ("Technical Depth", "Structured tool calls, deterministic financial scoring, document retrieval, variance checks, and memo generation.", "35%"),
         ("Evaluation & Evidence", "Ground-truth tests, repeatability check, source citations, full tool trace, and numerical consistency.", "15%"),
-        ("Clarity & Communication", "Guided narrative, clear recommendation labels, evidence cards, and an executive memo.", "20%"),
+        ("Clarity & Communication", "Guided finance narrative, clear recommendation labels, evidence cards, and an investment memo.", "20%"),
     ]
     for area, evidence, weight in rubric:
         st.markdown(f"- **{area} ({weight})**: {evidence}")
@@ -735,14 +753,14 @@ def run_repeatability_check(n_runs: int = 5) -> dict[str, Any]:
 
 
 def render_implementation_notes() -> None:
-    hero("Implementation Notes", "How the prototype demonstrates agentic decision support while staying demoable and auditable.", "Architecture")
+    hero("Implementation Notes", "How the prototype demonstrates finance workflow automation while staying demoable and auditable.", "Architecture")
     st.markdown(
         """
         ### Technical Architecture
 
-        The app is intentionally scoped to one workflow. The agentic layer is represented by structured tools for budget checks,
-        financial impact, document retrieval, comparable precedents, variance status, and approval routing. Tool outputs are then
-        normalized into a recommendation, evidence pack, scorecard, and memo.
+        The app is intentionally scoped to one finance workflow. The agentic layer is represented by structured tools for budget
+        checks, financial impact, document retrieval, comparable precedents, variance status, and approval routing. Tool outputs
+        are then normalized into a recommendation, evidence pack, scorecard, and memo.
 
         ### Production Safeguards
 
@@ -794,7 +812,7 @@ def tokenize(text: str) -> set[str]:
 
 
 def clean_dash(value: Any) -> str:
-    return str(value).replace("—", "-")
+    return str(value).replace("TeraWave — ", "").replace("TeraWave - ", "").replace("—", "-")
 
 
 def money(value: Any) -> str:
